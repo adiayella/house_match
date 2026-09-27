@@ -135,6 +135,7 @@ It replies with the bot's username and confirms the webhook is live.
 | `/status` | Either | Who has answered so far |
 | `/match` | Either | Run it now |
 | `/why` | Either | Everything that was ruled out, and which limit ruled it out |
+| `/demo` | Either | Load the three profiles from the case and run it — for testing without three phones |
 | `/cancel` | Private | Stop part-way through the form |
 | `/reset` | Either | Clear everything and start again |
 | `/usegroup` | Group | Tell the bot to post the shortlist in this chat |

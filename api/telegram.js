@@ -102,6 +102,7 @@ async function onMessage(msg) {
     case '/reset':  return resetEverything(chatId);
     case '/match':  return runMatch(chatId, { force: true });
     case '/why':    return runMatch(chatId, { force: true, why: true });
+    case '/demo':   return loadDemo(chatId);
     default: break;
   }
 
@@ -127,6 +128,7 @@ async function onGroupCommand(chatId, cmd, msg) {
     case '/status':  return statusMessage(chatId);
     case '/match':   return runMatch(chatId, { force: true });
     case '/why':     return runMatch(chatId, { force: true, why: true });
+    case '/demo':    return loadDemo(chatId);
     case '/reset':   return resetEverything(chatId);
     case '/help':
       return tg.sendMessage(chatId,
@@ -136,6 +138,7 @@ async function onGroupCommand(chatId, cmd, msg) {
         '/status — who has answered\n' +
         '/match — run it now\n' +
         '/why — what got ruled out and by whom\n' +
+        '/demo — load the three profiles from the case and run it\n' +
         '/reset — clear everything and start again');
     default: return;
   }
@@ -479,6 +482,38 @@ async function statusMessage(chatId) {
     (profiles.length < 3 ? '\n\n<i>Waiting on the rest.</i>' : '\n\nSend /match to run it.'));
 }
 
+/* ----------------------------------------------------------------------- *
+ * /demo — the scenario, without needing three phones
+ *
+ * Loads Riya, Meera and Kavita as the case describes them and runs the match
+ * immediately. Because the writes and the run happen inside a single request,
+ * this works even with no database configured, which the ordinary three-person
+ * flow does not.
+ *
+ * It says on screen that these are the case's profiles, not real people, and
+ * which two figures are project assumptions rather than facts from the case.
+ * ----------------------------------------------------------------------- */
+async function loadDemo(chatId) {
+  var groupId = await resolveGroupId();
+  await store.clearProfiles(groupId);
+
+  for (var i = 0; i < shared.demoProfiles.length; i++) {
+    var p = shared.demoProfiles[i];
+    await store.saveProfile(groupId, p.id, p);
+  }
+
+  await tg.sendMessage(chatId,
+    '<b>Loaded the three profiles from the case.</b>\n\n' +
+    shared.demoProfiles.map(function (p) { return fmt.profileSummary(p); }).join('\n\n') +
+    '\n\n<i>Two figures here are project assumptions, not facts from the case: ' +
+    'the family is placed in Aundh (the case never says where it is), and the office ' +
+    'commute ceiling is taken as 25 minutes to Hinjewadi Phase 1 (the case rules out ' +
+    '45 minutes but never states what would be acceptable).</i>\n\n' +
+    'Running the match now.');
+
+  return runMatch(chatId, { force: true });
+}
+
 async function resetEverything(chatId) {
   var groupId = await resolveGroupId();
   await store.clearProfiles(groupId);
@@ -586,6 +621,7 @@ function helpPrivate(chatId) {
     '/status — who has answered so far\n' +
     '/match — run it now\n' +
     '/why — what got ruled out and by whom\n' +
+    '/demo — load the three profiles from the case and run it\n' +
     '/cancel — stop part-way\n' +
     '/reset — clear everything and start again');
 }
