@@ -23,6 +23,21 @@ module.exports = async function handler(req, res) {
 
     telegram: {
       tokenConfigured: tg.hasToken(),
+      /* Three separate facts, because "not configured" covers three completely
+         different mistakes and they have different fixes:
+           variableExists false -> the variable was never saved, or was saved
+                                   under a different name, or to a different
+                                   project or environment
+           variableExists true but nonEmpty false -> saved with no value
+           nonEmpty true but looksLikeBotToken false -> something was pasted,
+                                   but it is not a bot token (wrong value,
+                                   stray quotes, half a paste)
+         No part of the value is ever echoed. */
+      tokenVariableExists: process.env.TELEGRAM_BOT_TOKEN !== undefined,
+      tokenNonEmpty: !!String(process.env.TELEGRAM_BOT_TOKEN || '').trim(),
+      tokenLooksLikeBotToken: /^\d{6,}:[A-Za-z0-9_-]{30,}$/
+        .test(String(process.env.TELEGRAM_BOT_TOKEN || '').trim().replace(/^["']|["']$/g, '')),
+      setupKeyConfigured: !!process.env.SETUP_KEY,
       groupChatIdConfigured: !!process.env.TELEGRAM_GROUP_CHAT_ID,
       webhookSecretConfigured: !!process.env.TELEGRAM_WEBHOOK_SECRET
     },
