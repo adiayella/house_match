@@ -483,7 +483,7 @@
         }
         groupCode = j.code;
         save();
-        var link = location.origin + '/app.html?join=' + j.code;
+        var link = location.origin + '/app?join=' + j.code;
         $('share-link').value = link;
         $('share-msg').textContent = 'Group ' + j.code + '. Send this to the other two. ' +
           'Each of them fills in her own form, and nobody sees anybody else’s answers ' +

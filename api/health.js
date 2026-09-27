@@ -70,6 +70,30 @@ module.exports = async function handler(req, res) {
     }
   };
 
+  /* A real call to the model, only when asked for: /api/health?deep=1.
+     Having a key set proves nothing about whether it is valid or whether the
+     model name is reachable, and this is the cheapest way to find out. It is
+     a billed request, so it is off by default. */
+  var url = new URL(req.url, 'https://' + req.headers.host);
+  if (url.searchParams.get('deep') === '1' && gemini.enabled()) {
+    report.model.liveCheck = await gemini.ping();
+  }
+
+  /* Same idea for the database: configured is not the same as working. */
+  if (url.searchParams.get('deep') === '1' && store.isDurable()) {
+    try {
+      await store.listProfiles('healthcheck-nonexistent');
+      report.storage.liveCheck = { ok: true, note: 'Query succeeded; schema.sql has been run.' };
+    } catch (e) {
+      report.storage.liveCheck = {
+        ok: false,
+        error: String(e.message || e),
+        fix: 'Usually means schema.sql has not been run in the Supabase SQL editor, ' +
+             'or the service role key is wrong.'
+      };
+    }
+  }
+
   /* Ask Telegram what it actually thinks the webhook is, when we can. */
   if (tg.hasToken()) {
     try {

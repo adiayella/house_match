@@ -46,7 +46,18 @@ module.exports = async function handler(req, res) {
       var text = await gemini.narrateOption(options[i], i + 1);
       narrations.push(text || null);
     }
-    return res.status(200).json({ ok: true, enabled: true, narrations: narrations });
+
+    var out = { ok: true, enabled: true, narrations: narrations };
+
+    /* When every narration came back empty, say why. Narration failing is
+       invisible by design - the page renders fine without it - so silence here
+       would leave a misconfigured key indistinguishable from a model that had
+       nothing to add. */
+    if (narrations.every(function (n) { return !n; })) {
+      out.modelError = gemini.getLastError() || 'the model returned nothing';
+      out.model = gemini.model;
+    }
+    return res.status(200).json(out);
   } catch (e) {
     /* A slow or rate-limited model must not take the page down with it. */
     return res.status(200).json({
