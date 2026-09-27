@@ -71,11 +71,14 @@
 
   /* ----------------------------- rendering ---------------------------- */
   function pill(status) {
-    var label = status === 'pass' ? 'gets' : status === 'fail' ? 'gives up' : 'unconfirmed';
-    return '<span class="pill ' + status + '">' + label + '</span>';
+    var label = status === 'pass' ? 'gets'
+      : status === 'fail' ? 'gives up'
+      : status === 'bonus' ? 'bonus' : 'unconfirmed';
+    var cls = status === 'bonus' ? 'pass' : status;
+    return '<span class="pill ' + cls + '">' + label + '</span>';
   }
 
-  function personBlock(p, spread, worstName) {
+  function personBlock(p, carrierNames) {
     var gets = p.preferencesMet.slice();
     p.travel.forEach(function (t) {
       if (t.status === 'pass') {
@@ -84,6 +87,8 @@
     });
     if (p.headroom > 0) { gets.push(M.money(p.headroom) + ' a month under her ceiling'); }
 
+    /* Only things she actually asked for and is not getting. An absent feature
+       she never wanted is not a sacrifice and must not be listed as one. */
     var gives = p.preferencesMissed.map(function (x) { return 'no ' + x.toLowerCase(); });
     if (p.headroom === 0) { gives.push('paying right up to her ceiling'); }
 
@@ -103,14 +108,19 @@
     node.innerHTML =
       '<div class="who-h"><b>' + esc(p.name) + '</b>' +
       '<span class="pill neutral">' + esc(M.money(p.share)) + '/month</span>' +
-      (p.name === worstName && spread > 0.2
+      (carrierNames.indexOf(p.name) !== -1
         ? '<span class="pill unverified">carrying most of the compromise</span>' : '') +
       '</div>' +
       '<ul class="lines">' +
       '<li>' + pill('pass') + '<span class="txt">' +
         (gets.length ? gets.join(', ') : 'nothing beyond the basics') + '</span></li>' +
-      '<li>' + pill('fail') + '<span class="txt">' +
-        (gives.length ? gives.join(', ') : 'nothing she listed') + '</span></li>' +
+      (gives.length
+        ? '<li>' + pill('fail') + '<span class="txt">' + gives.join(', ') + '</span></li>'
+        : '<li>' + pill('pass') + '<span class="txt">everything she asked for</span></li>') +
+      (p.bonuses && p.bonuses.length
+        ? '<li>' + pill('bonus') + '<span class="txt">' + esc(p.bonuses.join(', ')) +
+          ' <i>(didn’t ask for)</i></span></li>'
+        : '') +
       (open.length
         ? '<li>' + pill('unverified') + '<span class="txt">' + esc(open.join(', ')) + '</span></li>'
         : '') +
@@ -120,7 +130,13 @@
 
   function optionCard(ev, rank) {
     var l = ev.listing;
-    var worst = ev.perPerson.slice().sort(function (a, b) { return a.score - b.score; })[0];
+
+    /* Named only when somebody is genuinely short of a stated want. Nobody is
+       labelled as compromising on a flat that gave her everything she asked
+       for, whatever the blended score says. */
+    var carrierNames = (ev.compromise.anyone && !ev.compromise.even)
+      ? ev.compromise.carriers.map(function (x) { return x.name; })
+      : [];
 
     var card = el('div', 'opt');
     var head = el('div', 'opt-h');
@@ -158,7 +174,7 @@
     }
 
     ev.perPerson.forEach(function (p) {
-      card.appendChild(personBlock(p, ev.spread, worst.name));
+      card.appendChild(personBlock(p, carrierNames));
     });
     return card;
   }

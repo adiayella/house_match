@@ -269,6 +269,19 @@
       return { name: p, met: preferenceMet(listing, p) };
     });
 
+    /* Things this flat has that she never asked for.
+     *
+     * These are bonuses and must be reported as such. A missing feature is
+     * only a compromise when she actually wanted it; counting an unrequested
+     * absence against a flat would invent a sacrifice she never made, and
+     * quietly penalise the person who asked for least. */
+    var asked = {};
+    prefs.forEach(function (p) { asked[p.name] = true; });
+    var vocabulary = (window.HM_LISTINGS && window.HM_LISTINGS.preferenceVocabulary) || [];
+    var bonuses = vocabulary.filter(function (v) {
+      return !asked[v] && preferenceMet(listing, v);
+    });
+
     var fails = checks.filter(function (c) { return c.status === FAIL; });
     var open = checks.filter(function (c) { return c.status === UNVERIFIED; });
     var met = prefs.filter(function (p) { return p.met; });
@@ -295,6 +308,7 @@
       preferences: prefs,
       preferencesMet: met.map(function (p) { return p.name; }),
       preferencesMissed: prefs.filter(function (p) { return !p.met; }).map(function (p) { return p.name; }),
+      bonuses: bonuses,
       failures: fails,
       openQuestions: open,
       share: shares.monthly,
@@ -374,6 +388,28 @@
     var minScore = Math.min.apply(null, scores);
     var meanScore = scores.reduce(function (a, b) { return a + b; }, 0) / scores.length;
 
+    /* Who is actually giving something up.
+     *
+     * Measured in stated wants that went unmet — NOT in the blended score,
+     * which also moves with travel and budget headroom and would therefore
+     * accuse someone of compromising on a flat that gave her everything she
+     * asked for. If nobody's stated want is missing, nobody is compromising,
+     * whatever the scores say. */
+    var missedMax = Math.max.apply(null, perPerson.map(function (r) {
+      return r.preferencesMissed.length;
+    }));
+    var carriers = perPerson.filter(function (r) {
+      return r.preferencesMissed.length === missedMax;
+    });
+    var compromise = {
+      anyone: missedMax > 0,
+      most: missedMax,
+      even: missedMax === 0 || carriers.length === perPerson.length,
+      carriers: carriers.map(function (r) {
+        return { name: r.name, giving: r.preferencesMissed };
+      })
+    };
+
     return {
       listing: listing,
       shares: shares,
@@ -383,6 +419,7 @@
       groupOpenQuestions: groupOpen,
       qualifies: blockers.length === 0,
       blockers: blockers,
+      compromise: compromise,
       openCount: openCount,
       minScore: minScore,
       meanScore: meanScore,
