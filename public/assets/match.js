@@ -47,14 +47,23 @@
    * real field, the engine must not pretend to score it.
    * ----------------------------------------------------------------------- */
   var PREFERENCE_TESTS = {
+    'Fully furnished': function (l) { return l.furnishing === 'Fully Furnished'; },
     'Semi or fully furnished': function (l) { return l.furnishing !== 'Unfurnished'; },
-    'Three bathrooms': function (l) { return l.bathrooms >= 3; }
+    'Ready to move in': function (l) { return l.availableFrom === 'Ready to Move'; },
+    'Over 1000 sq ft': function (l) { return (l.sqft || 0) >= 1000; },
+    'Deposit under 2.5x the rent': function (l) {
+      return l.rent > 0 && l.deposit <= l.rent * 2.5;
+    },
+    'Open to all tenant types': function (l) { return l.tenants === 'All'; }
   };
 
   function preferenceMet(listing, pref) {
     var test = PREFERENCE_TESTS[pref];
     if (test) { return test(listing); }
-    return (listing.amenities || []).indexOf(pref) !== -1;
+    /* No test means the source has no field to check it against. An unscoreable
+       preference counts as unmet rather than silently as met, so it surfaces as
+       a compromise instead of flattering the option. */
+    return false;
   }
 
   /* ----------------------------------------------------------------------- *
@@ -68,7 +77,7 @@
    * The middle case is the honest one and the one most tools get wrong by
    * rounding to a midpoint and calling it a match.
    * ----------------------------------------------------------------------- */
-  function travelCheck(area, destId, maxMinutes, traffic) {
+  function travelCheck(area, destId, maxMinutes, traffic, areaDoubt) {
     var byArea = window.HM_TRAVEL.matrix[area];
     if (!byArea || !byArea[destId]) {
       return {
@@ -81,6 +90,18 @@
     var range = byArea[destId][traffic] || byArea[destId].peak;
     var lo = range[0];
     var hi = range[1];
+
+    /* The estimate is keyed on the area label. Where the record's own address
+       contradicts that label the journey cannot be trusted in either
+       direction, so a pass is downgraded rather than reported confidently. */
+    if (areaDoubt && hi <= maxMinutes) {
+      return {
+        status: UNVERIFIED,
+        range: range,
+        detail: 'About ' + lo + '–' + hi + ' min if the area label is right, but it ' +
+                'looks wrong: ' + areaDoubt + ' Check the real address.'
+      };
+    }
 
     if (hi <= maxMinutes) {
       return {
@@ -182,12 +203,48 @@
       checks.push({ kind: 'pets', label: 'Pets allowed', status: pet.status, hard: true, detail: pet.detail });
     }
     if (mh.minBathrooms) {
-      var okBath = listing.bathrooms >= mh.minBathrooms;
+      /* Tri-state, not a comparison. `null >= 2` is false in JavaScript, so a
+         naive numeric test would silently reject every listing whose source
+         never mentioned bathrooms — which, for this dataset, is all of them. */
+      var bathStatus, bathDetail;
+      if (listing.bathrooms === null || listing.bathrooms === undefined) {
+        bathStatus = UNVERIFIED;
+        bathDetail = 'Bathroom count not stated by the source. Unconfirmed, not assumed.';
+      } else if (listing.bathrooms >= mh.minBathrooms) {
+        bathStatus = PASS;
+        bathDetail = 'Listing has ' + listing.bathrooms + '.';
+      } else {
+        bathStatus = FAIL;
+        bathDetail = 'Listing has only ' + listing.bathrooms + '.';
+      }
       checks.push({
         kind: 'bathrooms',
         label: 'At least ' + mh.minBathrooms + ' bathroom' + (mh.minBathrooms > 1 ? 's' : ''),
-        status: okBath ? PASS : FAIL, hard: true,
-        detail: 'Listing has ' + listing.bathrooms + '.'
+        status: bathStatus, hard: true, detail: bathDetail
+      });
+    }
+
+    /* --- who the landlord will actually rent to --- */
+    if (person.sharingAsGroup !== false) {
+      var t2 = listing.tenants || '';
+      var tenantStatus, tenantDetail;
+      if (t2 === 'All') {
+        tenantStatus = PASS;
+        tenantDetail = 'Listed as open to all tenant types.';
+      } else if (/Bachelor Male/i.test(t2)) {
+        tenantStatus = FAIL;
+        tenantDetail = 'Listed for male tenants only.';
+      } else if (/Company/i.test(t2) && !/Family/i.test(t2)) {
+        tenantStatus = FAIL;
+        tenantDetail = 'Listed for corporate lets only.';
+      } else {
+        tenantStatus = UNVERIFIED;
+        tenantDetail = 'Listed as "' + t2 + '". Landlords vary on whether three friends ' +
+                       'sharing counts. Worth asking before viewing.';
+      }
+      checks.push({
+        kind: 'tenants', label: 'Landlord accepts three friends sharing',
+        status: tenantStatus, hard: true, detail: tenantDetail
       });
     }
 
@@ -195,7 +252,7 @@
     var travelRows = [];
     (person.destinations || []).forEach(function (d) {
       if (!d.destId || !d.maxMinutes) { return; }
-      var t = travelCheck(listing.area, d.destId, d.maxMinutes, traffic);
+      var t = travelCheck(listing.area, d.destId, d.maxMinutes, traffic, listing.areaDoubt);
       var destLabel = (window.HM_TRAVEL.destinations[d.destId] || {}).label || d.destId;
       var row = {
         kind: 'travel',
@@ -264,14 +321,55 @@
       return evaluatePerson(p, listing, shares, options.traffic);
     });
 
+    /* Group-level checks belong to nobody in particular, so they are kept
+       separate from the per-person columns and attributed to "Everyone". */
+    var groupChecks = [];
+    var needed = options.minBedrooms || n;
+    if (listing.bedrooms === null || listing.bedrooms === undefined) {
+      groupChecks.push({
+        kind: 'bedrooms', label: needed + ' bedrooms for ' + n + ' people',
+        status: UNVERIFIED, detail: 'Bedroom count could not be read from the listing title.'
+      });
+    } else if (listing.bedrooms < needed) {
+      groupChecks.push({
+        kind: 'bedrooms', label: needed + ' bedrooms for ' + n + ' people',
+        status: FAIL,
+        detail: 'This is a ' + listing.bhkLabel + '. Three people sharing need ' +
+                needed + ' bedrooms, and nobody said they would share a room.'
+      });
+    } else {
+      groupChecks.push({
+        kind: 'bedrooms', label: needed + ' bedrooms for ' + n + ' people',
+        status: PASS, detail: listing.bhkLabel + '.'
+      });
+    }
+
+    /* Maintenance is missing from this source, so the per-person share is the
+       rent alone and is therefore a floor, not a final figure. */
+    if (listing.maintenanceStated === false) {
+      groupChecks.push({
+        kind: 'maintenance', label: 'Maintenance charge known',
+        status: UNVERIFIED,
+        detail: 'Not stated by the source, so it is not in the share above. ' +
+                'The real monthly cost is this or higher, never lower.'
+      });
+    }
+
     var blockers = [];
+    groupChecks.forEach(function (c) {
+      if (c.status === FAIL) {
+        blockers.push({ person: 'Everyone', label: c.label, detail: c.detail, kind: c.kind });
+      }
+    });
     perPerson.forEach(function (r) {
       r.failures.forEach(function (f) {
         blockers.push({ person: r.name, label: f.label, detail: f.detail, kind: f.kind });
       });
     });
 
-    var openCount = perPerson.reduce(function (s, r) { return s + r.openQuestions.length; }, 0);
+    var groupOpen = groupChecks.filter(function (c) { return c.status === UNVERIFIED; });
+    var openCount = perPerson.reduce(function (s, r) { return s + r.openQuestions.length; }, 0) +
+                    groupOpen.length;
     var scores = perPerson.map(function (r) { return r.score; });
     var minScore = Math.min.apply(null, scores);
     var meanScore = scores.reduce(function (a, b) { return a + b; }, 0) / scores.length;
@@ -281,6 +379,8 @@
       shares: shares,
       totalMonthly: listing.rent + (listing.maintenance || 0),
       perPerson: perPerson,
+      groupChecks: groupChecks,
+      groupOpenQuestions: groupOpen,
       qualifies: blockers.length === 0,
       blockers: blockers,
       openCount: openCount,

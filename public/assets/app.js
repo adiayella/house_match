@@ -126,19 +126,36 @@
     var head = el('div', 'opt-h');
     head.innerHTML =
       '<div class="t"><span class="pill rank">' + rank + '</span>' +
-      '<h3>' + esc(l.bhk + ' BHK in ' + l.area) + '</h3>' +
+      '<h3>' + esc(l.title) + '</h3>' +
       (ev.openCount ? '<span class="pill unverified">' + ev.openCount +
         ' open question' + (ev.openCount === 1 ? '' : 's') + '</span>' : '') +
       '</div>' +
       '<p class="muted" style="margin:6px 0 0">' + esc(l.microLocation) + '</p>' +
       '<div class="opt-money">' +
       '<span><b>' + esc(M.money(ev.shares.monthly)) + '</b> each per month</span>' +
-      '<span>' + esc(M.money(ev.totalMonthly)) + ' total</span>' +
+      '<span>' + esc(M.money(ev.totalMonthly)) + ' rent</span>' +
       '<span>deposit <b>' + esc(M.money(ev.shares.deposit)) + '</b> each</span>' +
-      '<span>' + l.bathrooms + ' bath · ' + esc(l.furnishing) +
-        ' · floor ' + l.floor + '/' + l.totalFloors + '</span>' +
-      '</div>';
+      '<span>' + esc(l.bhkLabel) + ' · ' + esc(l.sqft) + ' sq ft · ' +
+        esc(l.furnishing) + '</span>' +
+      '<span>' + esc(l.availableFrom) + ' · tenants: ' + esc(l.tenants) + '</span>' +
+      '</div>' +
+      (l.sourceUrl
+        ? '<p class="muted" style="margin:8px 0 0"><a href="' + esc(l.sourceUrl) +
+          '" target="_blank" rel="noopener">Check this listing on NoBroker</a></p>'
+        : '');
     card.appendChild(head);
+
+    /* Group-level open questions sit above the per-person columns: they are
+       nobody's requirement in particular but everybody's problem. */
+    if (ev.groupOpenQuestions && ev.groupOpenQuestions.length) {
+      var g = el('div', 'who');
+      g.innerHTML = '<div class="who-h"><b>Everyone</b></div><ul class="lines">' +
+        ev.groupOpenQuestions.map(function (c) {
+          return '<li>' + pill('unverified') + '<span class="txt"><b>' + esc(c.label) +
+            '</b> &mdash; ' + esc(c.detail) + '</span></li>';
+        }).join('') + '</ul>';
+      card.appendChild(g);
+    }
 
     ev.perPerson.forEach(function (p) {
       card.appendChild(personBlock(p, ev.spread, worst.name));

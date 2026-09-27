@@ -1,224 +1,1017 @@
 /* ---------------------------------------------------------------------------
  * HouseMatch — listing dataset
  *
- * PROVENANCE / HONESTY NOTE
- * This is a CURATED SAMPLE DATASET, not a live portal feed. The rents, deposits
- * and amenity mixes are representative of 3BHK rentals in these Pune areas in
- * 2026, and the areas themselves come from real geography, but each row is a
- * stand-in for a listing rather than a specific advertised flat. No row claims
- * a deep link to a real advert, because inventing one would be dishonest.
+ * REAL DATA. Pulled from nobroker.in on 2026-09-27 by reading the rendered
+ * search page for each area. The raw scrape is embedded below VERBATIM, exactly
+ * as it came back, and every transformation applied to it is visible in the
+ * normalisation code underneath. Nothing has been tidied by hand: if a record
+ * looks odd, that is what the source said.
  *
- * Why a curated set rather than an API: the public property portals for this
- * market do not expose a usable, authorised rental API. Rather than assume one
- * exists, the tool reads from this file behind a thin loader, so swapping in a
- * real feed later means replacing one module and nothing else.
+ * WHAT THE SOURCE DOES NOT GIVE US, AND WHY THAT MATTERS
  *
- * MISSING DATA IS DELIBERATE. `null` means "the source did not state this".
- * List views on the real portals genuinely omit lift and parking a lot of the
- * time. The matching engine must surface those as NEEDS VERIFICATION and must
- * never let a null satisfy a non-negotiable. Meera's lift is why that rule
- * exists.
+ * The list view does not state lift, parking, bathroom count or floor for a
+ * single one of these 55 properties. They are therefore all null, and null
+ * means "unstated" — never "fine". The engine turns every one of them into a
+ * NEEDS VERIFICATION line on the option rather than letting it pass quietly.
  *
- * Fields:
- *   rent, maintenance, deposit  - rupees (deposit is one-off, rest per month)
- *   lift, parking, petFriendly  - true | false | null   (null = unstated)
- *   amenities                   - matched against stated preferences
+ * This is inconvenient and it is the honest result. Meera's lift is the whole
+ * reason the rule exists: a tool that treats a blank field as a satisfied
+ * requirement will eventually tell someone with a knee condition that a flat
+ * is fine when nobody ever checked. Every shortlisted flat here carries an
+ * explicit "confirm the lift before you view this" instead.
+ *
+ * AREA LABELS ARE NOT ALWAYS RIGHT
+ *
+ * Several records carry an area label that its own address contradicts — a
+ * listing tagged Kothrud whose address is in Sus, ones tagged Hinjewadi Phase 1
+ * that say Phase 2. Since travel time is computed from the area label, a wrong
+ * label produces a confident and wrong commute. Those records are flagged in
+ * AREA_DOUBTS below and the engine downgrades their travel checks to needs
+ * verification rather than trusting the label.
  * ------------------------------------------------------------------------- */
 
-window.HM_LISTINGS = {
-  meta: {
-    provenance: 'curated sample dataset',
-    market: 'Pune, India',
-    propertyType: '3 BHK rental',
-    currency: 'INR',
-    compiled: '2026-09-27',
-    notLiveFeed: true
-  },
+window.HM_LISTINGS = (function () {
+  'use strict';
 
-  /* A real portal search page per area, so any row can be checked by hand.
-     These are SEARCH pages, not claimed listing URLs. */
-  verifySearch: {
-    'Baner':             'https://www.nobroker.in/property/rent/pune/Baner',
-    'Balewadi':          'https://www.nobroker.in/property/rent/pune/Balewadi',
-    'Mahalunge':         'https://www.nobroker.in/property/rent/pune/Mahalunge',
-    'Wakad':             'https://www.nobroker.in/property/rent/pune/Wakad',
-    'Hinjewadi Phase 1': 'https://www.nobroker.in/property/rent/pune/Hinjewadi',
-    'Sus':               'https://www.nobroker.in/property/rent/pune/Sus',
-    'Aundh':             'https://www.nobroker.in/property/rent/pune/Aundh',
-    'Kothrud':           'https://www.nobroker.in/property/rent/pune/Kothrud'
-  },
-
-  items: [
-    /* ---------------- Baner - Riya's preferred area ---------------- */
+  /* ----------------------- the scrape, untouched ----------------------- */
+  var RAW =
+{
+  "_readme": "Real listings pulled live from nobroker.in on 2026-09-27 by reading the rendered search page (the NoBroker RapidAPI wrapper does not work — see README.md). Covers all 5 candidate areas from the case: Baner, Balewadi, Mahalunge, Wakad, Hinjewadi Phase 1, plus Kothrud. Each area's listings were fetched by resolving the area name to its real Google Place ID via NoBroker's own autocomplete endpoint (intercepted client-side), then navigating directly to a URL carrying that placeId in `searchParam` — NoBroker's search only renders real results when the URL's searchParam.placeId is correct; lat/lon and the placeName label are cosmetic. lift/parking are null because the list view doesn't show them; they show 'Needs verification' until someone checks the actual listing page or calls the owner, per the project's own rule: never silently assume a mandatory requirement is met.",
+  "fetched_at": "2026-09-27",
+  "source": "nobroker.in (rendered page read, not the RapidAPI wrapper)",
+  "listings": [
     {
-      id: 'L01', area: 'Baner', microLocation: 'Off Baner Road, near Balewadi phata',
-      bhk: 3, rent: 55000, maintenance: 4000, deposit: 300000,
-      bathrooms: 3, furnishing: 'Fully furnished', floor: 7, totalFloors: 12,
-      lift: true, parking: true, petFriendly: true,
-      amenities: ['Balcony', 'Gym in society', 'Power backup', '24x7 water', 'Covered parking', 'Quiet street'],
-      note: 'Premium end of Baner. Included to show a flat that fails on money, not on taste.'
+      "id": "nb-001",
+      "title": "1 BHK Apartment In Royal Enclave, Baner",
+      "area": "Baner",
+      "address": "Royal Enclave, Baner, Pune, Maharashtra 411045",
+      "bhk": "1 BHK",
+      "rent": 21000,
+      "deposit": 40000,
+      "builtup_sqft": 550,
+      "furnishing": "Fully Furnished",
+      "preferred_tenants": "Bachelor Female",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner?searchParam=W3sibGF0IjoxOC41NjQyNDUyLCJsb24iOjczLjc3Njg1MTEsInBsYWNlSWQiOiJDaElKeTlOZDhNLS13anNSZmF0Xy01Y1NrYUUiLCJwbGFjZU5hbWUiOiJCYW5lciJ9XQ==&radius=2.0&sharedAccomodation=0&city=pune&locality=Baner"
     },
     {
-      id: 'L02', area: 'Baner', microLocation: 'Baner, Mahalunge-facing side',
-      bhk: 3, rent: 45000, maintenance: 3000, deposit: 200000,
-      bathrooms: 2, furnishing: 'Semi-furnished', floor: 4, totalFloors: 11,
-      lift: true, parking: true, petFriendly: null,
-      amenities: ['Balcony', 'Gym in society', '24x7 water', 'Near a park'],
-      note: 'Stands in for the Baner 3BHK from the scenario: Riya loved it, the office run killed it.'
-    },
-
-    /* ---------------- Balewadi ---------------- */
-    {
-      id: 'L03', area: 'Balewadi', microLocation: 'Near Balewadi High Street',
-      bhk: 3, rent: 45000, maintenance: 3000, deposit: 225000,
-      bathrooms: 3, furnishing: 'Semi-furnished', floor: 6, totalFloors: 14,
-      lift: true, parking: true, petFriendly: true,
-      amenities: ['Balcony', 'Gym in society', 'Power backup', '24x7 water', 'Covered parking'],
-      note: 'Good on paper for Riya and Meera; the Hinjewadi peak-hour run is the problem.'
+      "id": "nb-002",
+      "title": "2 BHK Flat In Platinum, Pancard Club",
+      "area": "Baner",
+      "address": "Pan Card Club Road, Baner, Pune",
+      "bhk": "2 BHK",
+      "rent": 40000,
+      "deposit": 80000,
+      "builtup_sqft": 906,
+      "furnishing": "Fully Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner"
     },
     {
-      id: 'L04', area: 'Balewadi', microLocation: 'Balewadi, stadium side',
-      bhk: 3, rent: 40000, maintenance: 2500, deposit: 180000,
-      bathrooms: 2, furnishing: 'Unfurnished', floor: 3, totalFloors: 8,
-      lift: true, parking: null, petFriendly: null,
-      amenities: ['Balcony', '24x7 water'],
-      note: 'Parking unstated in the source, so it must be verified rather than assumed.'
-    },
-
-    /* ---------------- Mahalunge - the compromise corridor ---------------- */
-    {
-      id: 'L05', area: 'Mahalunge', microLocation: 'Mahalunge, near the Baner-Hinjewadi link',
-      bhk: 3, rent: 38000, maintenance: 2500, deposit: 160000,
-      bathrooms: 3, furnishing: 'Semi-furnished', floor: 5, totalFloors: 13,
-      lift: true, parking: true, petFriendly: true,
-      amenities: ['Balcony', 'Gym in society', 'Power backup', '24x7 water', 'Covered parking'],
-      note: 'The balanced candidate: sits between Baner and Hinjewadi and is under every ceiling.'
+      "id": "nb-003",
+      "title": "2 BHK Apartment In Omega Residency",
+      "area": "Baner",
+      "address": "Omega Residency Ln, Baner Rd, opp. KFC, Baner, Pune 411045",
+      "bhk": "2 BHK",
+      "rent": 48000,
+      "deposit": 94000,
+      "builtup_sqft": 1250,
+      "furnishing": "Fully Furnished",
+      "preferred_tenants": "All",
+      "available_from": "2026-09-29",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner"
     },
     {
-      id: 'L06', area: 'Mahalunge', microLocation: 'Mahalunge, older low-rise pocket',
-      bhk: 3, rent: 34000, maintenance: 2000, deposit: 140000,
-      bathrooms: 2, furnishing: 'Unfurnished', floor: 3, totalFloors: 3,
-      lift: false, parking: true, petFriendly: true,
-      amenities: ['Balcony', 'Quiet street', 'Near a park'],
-      note: 'Cheapest in the corridor and a hard no: third floor, confirmed no lift.'
+      "id": "nb-004",
+      "title": "2 BHK Apartment In Malhar Apartment",
+      "area": "Baner",
+      "address": "Baner, Pune, Maharashtra 411045",
+      "bhk": "2 BHK",
+      "rent": 28000,
+      "deposit": 56000,
+      "builtup_sqft": 990,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-09-29",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner"
     },
     {
-      id: 'L07', area: 'Mahalunge', microLocation: 'Mahalunge, newer tower cluster',
-      bhk: 3, rent: 42000, maintenance: 3000, deposit: 200000,
-      bathrooms: 2, furnishing: 'Semi-furnished', floor: 9, totalFloors: 18,
-      lift: null, parking: true, petFriendly: null,
-      amenities: ['Balcony', 'Gym in society', 'Power backup', '24x7 water'],
-      note: 'Ninth floor with lift UNSTATED. An eighteen-storey tower almost certainly has one, but the tool will not guess on a non-negotiable.'
+      "id": "nb-005",
+      "title": "2 BHK Apartment In Laxminarayan Shalom Homes",
+      "area": "Baner",
+      "address": "Behind Audi Showroom, Baner, Pune",
+      "bhk": "2 BHK",
+      "rent": 35000,
+      "deposit": 75000,
+      "builtup_sqft": 1200,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "All",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner"
     },
     {
-      id: 'L08', area: 'Mahalunge', microLocation: 'Mahalunge, premium tower',
-      bhk: 3, rent: 47000, maintenance: 3000, deposit: 250000,
-      bathrooms: 3, furnishing: 'Fully furnished', floor: 11, totalFloors: 20,
-      lift: true, parking: true, petFriendly: true,
-      amenities: ['Balcony', 'Gym in society', 'Power backup', '24x7 water', 'Covered parking', 'Quiet street'],
-      note: 'Right location, ticks every requirement, and still fails: the per-person share lands above the tightest ceiling.'
-    },
-
-    /* ---------------- Wakad - closest to Hinjewadi ---------------- */
-    {
-      id: 'L09', area: 'Wakad', microLocation: 'Wakad, Hinjewadi-facing side',
-      bhk: 3, rent: 33000, maintenance: 2000, deposit: 150000,
-      bathrooms: 2, furnishing: 'Semi-furnished', floor: 6, totalFloors: 12,
-      lift: true, parking: true, petFriendly: false,
-      amenities: ['Balcony', '24x7 water', 'Power backup'],
-      note: 'Cheap, lift confirmed, short office run. Explicitly not pet-friendly.'
+      "id": "nb-006",
+      "title": "2 BHK Apartment In North Cape Venicia",
+      "area": "Baner",
+      "address": "North Cape Venicia, Baner, Pune",
+      "bhk": "2 BHK",
+      "rent": 40000,
+      "deposit": 100000,
+      "builtup_sqft": 1125,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner"
     },
     {
-      id: 'L10', area: 'Wakad', microLocation: 'Wakad, near Datta Mandir road',
-      bhk: 3, rent: 30000, maintenance: 1500, deposit: 120000,
-      bathrooms: 2, furnishing: 'Unfurnished', floor: 4, totalFloors: 9,
-      lift: true, parking: null, petFriendly: null,
-      amenities: ['24x7 water'],
-      note: 'The budget option. Thin on amenities, so it shows up as a real compromise rather than a bargain.'
+      "id": "nb-007",
+      "title": "2 BHK Apartment In Royal 21 Baner Hills",
+      "area": "Baner",
+      "address": "85/A/2/39, Baner Gaothan, Baner, Pune, Maharashtra 411069",
+      "bhk": "2 BHK",
+      "rent": 38000,
+      "deposit": 76000,
+      "builtup_sqft": 400,
+      "furnishing": "Fully Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner"
     },
     {
-      id: 'L11', area: 'Wakad', microLocation: 'Wakad, gated township',
-      bhk: 3, rent: 44000, maintenance: 3000, deposit: 220000,
-      bathrooms: 3, furnishing: 'Semi-furnished', floor: 8, totalFloors: 16,
-      lift: true, parking: true, petFriendly: true,
-      amenities: ['Balcony', 'Gym in society', 'Power backup', '24x7 water', 'Covered parking', 'Near a park'],
-      note: 'The comfortable Wakad option: everything confirmed, share still inside every ceiling.'
+      "id": "nb-008",
+      "title": "3 BHK Apartment In Bhansali Park Marina",
+      "area": "Balewadi",
+      "address": "Kalamkar Park 1 Rd, Balewadi Phata, Baner, Pune, Maharashtra 411045",
+      "bhk": "3 BHK",
+      "rent": 50000,
+      "deposit": 100000,
+      "builtup_sqft": 1686,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-10-31",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner"
     },
     {
-      id: 'L12', area: 'Wakad', microLocation: 'Wakad, new high-rise',
-      bhk: 3, rent: 52000, maintenance: 3500, deposit: 280000,
-      bathrooms: 3, furnishing: 'Fully furnished', floor: 14, totalFloors: 22,
-      lift: true, parking: true, petFriendly: true,
-      amenities: ['Balcony', 'Gym in society', 'Power backup', '24x7 water', 'Covered parking', 'Quiet street'],
-      note: 'Over budget for this group.'
-    },
-
-    /* ---------------- Hinjewadi Phase 1 - Kavita's ideal ---------------- */
-    {
-      id: 'L13', area: 'Hinjewadi Phase 1', microLocation: 'Phase 1, Baner-facing edge',
-      bhk: 3, rent: 36000, maintenance: 2500, deposit: 160000,
-      bathrooms: 2, furnishing: 'Semi-furnished', floor: 5, totalFloors: 11,
-      lift: true, parking: true, petFriendly: null,
-      amenities: ['Balcony', 'Gym in society', '24x7 water', 'Power backup'],
-      note: 'One person walks to work and another loses her family radius. The cleanest one-sided tradeoff in the set.'
+      "id": "nb-009",
+      "title": "1 BHK Apartment In Royal Enclave, Balewadi High Street",
+      "area": "Balewadi",
+      "address": "Balewadi Phata, Pune",
+      "bhk": "1 BHK",
+      "rent": 25900,
+      "deposit": 50000,
+      "builtup_sqft": 575,
+      "furnishing": "Fully Furnished",
+      "preferred_tenants": "Company",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner"
     },
     {
-      id: 'L14', area: 'Hinjewadi Phase 1', microLocation: 'Phase 1, interior lane',
-      bhk: 3, rent: 30000, maintenance: 2000, deposit: 120000,
-      bathrooms: 2, furnishing: 'Unfurnished', floor: 4, totalFloors: 4,
-      lift: false, parking: true, petFriendly: null,
-      amenities: ['24x7 water'],
-      note: 'Fails twice over: no lift, and too far from the other side of the city.'
-    },
-
-    /* ---------------- Kothrud - where Meera looked ---------------- */
-    {
-      id: 'L15', area: 'Kothrud', microLocation: 'Kothrud, main road side',
-      bhk: 3, rent: 36000, maintenance: 2000, deposit: 150000,
-      bathrooms: 2, furnishing: 'Semi-furnished', floor: 6, totalFloors: 10,
-      lift: true, parking: true, petFriendly: null,
-      amenities: ['Balcony', '24x7 water', 'Near a park'],
-      note: 'Stands in for the Kothrud flat from the scenario: fit the budget, wrecked both travel limits.'
+      "id": "nb-010",
+      "title": "2 BHK Apartment In Elegance Vega",
+      "area": "Baner",
+      "address": "Near Bitwise, Nanaware Chowk, Baner, Pune",
+      "bhk": "2 BHK",
+      "rent": 45000,
+      "deposit": 125000,
+      "builtup_sqft": 990,
+      "furnishing": "Fully Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner"
     },
     {
-      id: 'L16', area: 'Kothrud', microLocation: 'Kothrud, older building',
-      bhk: 3, rent: 33000, maintenance: 1800, deposit: 130000,
-      bathrooms: 2, furnishing: 'Unfurnished', floor: 5, totalFloors: 5,
-      lift: false, parking: true, petFriendly: true,
-      amenities: ['Balcony', 'Quiet street'],
-      note: 'The fifth-floor-no-lift flat from the scenario, kept in the dataset on purpose so the tool has to reject it out loud.'
-    },
-
-    /* ---------------- Secondary areas ---------------- */
-    {
-      id: 'L17', area: 'Sus', microLocation: 'Sus, towards Bhugaon',
-      bhk: 3, rent: 34000, maintenance: 2000, deposit: 140000,
-      bathrooms: 2, furnishing: 'Semi-furnished', floor: 3, totalFloors: 7,
-      lift: null, parking: true, petFriendly: true,
-      amenities: ['Balcony', 'Quiet street', 'Near a park'],
-      note: 'Secondary search area: commute evidence is weak and lift is unstated.'
+      "id": "nb-011",
+      "title": "4 BHK Villa In Manohar Villas",
+      "area": "Baner",
+      "address": "Manohar Villas, Baner, Pune, Maharashtra 411045",
+      "bhk": "4 BHK",
+      "rent": 100000,
+      "deposit": 250000,
+      "builtup_sqft": 1265,
+      "furnishing": "Unfurnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-09-29",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner"
     },
     {
-      id: 'L18', area: 'Aundh', microLocation: 'Aundh, near Parihar Chowk',
-      bhk: 3, rent: 52000, maintenance: 3500, deposit: 275000,
-      bathrooms: 3, furnishing: 'Fully furnished', floor: 8, totalFloors: 14,
-      lift: true, parking: true, petFriendly: true,
-      amenities: ['Balcony', 'Gym in society', 'Power backup', '24x7 water', 'Covered parking'],
-      note: 'Closest to the assumed family location and the worst possible office run.'
+      "id": "nb-012",
+      "title": "1 BHK Apartment In Aaditya Heights",
+      "area": "Hinjewadi Phase 1",
+      "address": "Hinjewadi Phase 1, near Hirai Sitai Mandir, Bhumkar Chowk, Wakad",
+      "bhk": "1 BHK",
+      "rent": 13000,
+      "deposit": 25000,
+      "builtup_sqft": 450,
+      "furnishing": "Unfurnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner"
+    },
+    {
+      "id": "nb-013",
+      "title": "1 BHK House In Datta Mandir Road, Mangal Nagar",
+      "area": "Wakad",
+      "address": "Independent House, Opposite Mahanagar Bank, near Dange Chowk, D Mart, Thergaon, Pune",
+      "bhk": "1 BHK",
+      "rent": 17000,
+      "deposit": 45000,
+      "builtup_sqft": 500,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Wakad?searchParam=W3sibGF0IjoxOC41OTc1LCJsb24iOjczLjc2MjksInBsYWNlSWQiOiJDaElKN1J0WHIzcTV3anNSYzJhbnBXczBad3ciLCJwbGFjZU5hbWUiOiJXYWthZCJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Wakad"
+    },
+    {
+      "id": "nb-014",
+      "title": "2 BHK Apartment In Sai Pleasure",
+      "area": "Wakad",
+      "address": "Sai Pleasure, Wakad, Pune, Maharashtra 411057",
+      "bhk": "2 BHK",
+      "rent": 28000,
+      "deposit": 70000,
+      "builtup_sqft": 650,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Wakad?searchParam=W3sibGF0IjoxOC41OTc1LCJsb24iOjczLjc2MjksInBsYWNlSWQiOiJDaElKN1J0WHIzcTV3anNSYzJhbnBXczBad3ciLCJwbGFjZU5hbWUiOiJXYWthZCJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Wakad"
+    },
+    {
+      "id": "nb-015",
+      "title": "1 BHK Apartment In Swami Angan Society",
+      "area": "Wakad",
+      "address": "Bhagwan Nagar Gali, Bhagwan Nagar, Bhumkar Nagar, Wakad, Pimpri-Chinchwad, Maharashtra 411057",
+      "bhk": "1 BHK",
+      "rent": 20000,
+      "deposit": 40000,
+      "builtup_sqft": 470,
+      "furnishing": "Unfurnished",
+      "preferred_tenants": "Bachelor Male",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Wakad?searchParam=W3sibGF0IjoxOC41OTc1LCJsb24iOjczLjc2MjksInBsYWNlSWQiOiJDaElKN1J0WHIzcTV3anNSYzJhbnBXczBad3ciLCJwbGFjZU5hbWUiOiJXYWthZCJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Wakad"
+    },
+    {
+      "id": "nb-016",
+      "title": "2 BHK Apartment In Nisarg Serene",
+      "area": "Wakad",
+      "address": "Near Phoenix Mall of the Millennium, Wakad, Pune",
+      "bhk": "2 BHK",
+      "rent": 30000,
+      "deposit": 90000,
+      "builtup_sqft": 812,
+      "furnishing": "Fully Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Wakad?searchParam=W3sibGF0IjoxOC41OTc1LCJsb24iOjczLjc2MjksInBsYWNlSWQiOiJDaElKN1J0WHIzcTV3anNSYzJhbnBXczBad3ciLCJwbGFjZU5hbWUiOiJXYWthZCJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Wakad"
+    },
+    {
+      "id": "nb-017",
+      "title": "2 BHK Apartment In Royal Oak, Wakad",
+      "area": "Wakad",
+      "address": "Wakad, Pune, Maharashtra 411057",
+      "bhk": "2 BHK",
+      "rent": 27000,
+      "deposit": 60000,
+      "builtup_sqft": 870,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family, Company",
+      "available_from": "2026-10-31",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Wakad?searchParam=W3sibGF0IjoxOC41OTc1LCJsb24iOjczLjc2MjksInBsYWNlSWQiOiJDaElKN1J0WHIzcTV3anNSYzJhbnBXczBad3ciLCJwbGFjZU5hbWUiOiJXYWthZCJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Wakad"
+    },
+    {
+      "id": "nb-018",
+      "title": "1 BHK Independent House In Wakad",
+      "area": "Wakad",
+      "address": "Independent House, Wakad, Pune, Maharashtra 411057",
+      "bhk": "1 BHK",
+      "rent": 22000,
+      "deposit": 50000,
+      "builtup_sqft": 550,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Wakad?searchParam=W3sibGF0IjoxOC41OTc1LCJsb24iOjczLjc2MjksInBsYWNlSWQiOiJDaElKN1J0WHIzcTV3anNSYzJhbnBXczBad3ciLCJwbGFjZU5hbWUiOiJXYWthZCJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Wakad"
+    },
+    {
+      "id": "nb-019",
+      "title": "1 BHK Apartment In Casa Imperia",
+      "area": "Wakad",
+      "address": "Near Hinjewadi Over Bridge, Jamdade Vasti, Wakad, Pune, Maharashtra",
+      "bhk": "1 BHK",
+      "rent": 25000,
+      "deposit": 75000,
+      "builtup_sqft": 690,
+      "furnishing": "Unfurnished",
+      "preferred_tenants": "Family",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Wakad?searchParam=W3sibGF0IjoxOC41OTc1LCJsb24iOjczLjc2MjksInBsYWNlSWQiOiJDaElKN1J0WHIzcTV3anNSYzJhbnBXczBad3ciLCJwbGFjZU5hbWUiOiJXYWthZCJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Wakad"
+    },
+    {
+      "id": "nb-020",
+      "title": "2 BHK Apartment In Hill Crest Society, Sus Gaon",
+      "area": "Kothrud",
+      "address": "Near Periwinkle Schools, Sunny World Residential Hotel, Sus, Sus Gaon, Maharashtra",
+      "bhk": "2 BHK",
+      "rent": 20000,
+      "deposit": 40000,
+      "builtup_sqft": 700,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Kothrud?searchParam=W3sibGF0IjoxOC41MDc0LCJsb24iOjczLjgwNzcsInBsYWNlSWQiOiJDaElKbllTdk1yZV93anNSOEVULXMwaUxCOVEiLCJwbGFjZU5hbWUiOiJLb3RocnVkIn1d&radius=2.0&sharedAccomodation=0&city=pune&locality=Kothrud"
+    },
+    {
+      "id": "nb-021",
+      "title": "1 BHK Apartment In Lunawat Complex",
+      "area": "Kothrud",
+      "address": "Lunawat Complex, opposite Kothrud bus stand, Kothrud, Pune",
+      "bhk": "1 BHK",
+      "rent": 25000,
+      "deposit": 50000,
+      "builtup_sqft": 560,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-10-04",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Kothrud?searchParam=W3sibGF0IjoxOC41MDc0LCJsb24iOjczLjgwNzcsInBsYWNlSWQiOiJDaElKbllTdk1yZV93anNSOEVULXMwaUxCOVEiLCJwbGFjZU5hbWUiOiJLb3RocnVkIn1d&radius=2.0&sharedAccomodation=0&city=pune&locality=Kothrud"
+    },
+    {
+      "id": "nb-022",
+      "title": "3 BHK Apartment In Tejaura-401",
+      "area": "Kothrud",
+      "address": "Late H B Chavan Gosavi Path, Kothrud, Pune",
+      "bhk": "3 BHK",
+      "rent": 55000,
+      "deposit": 165000,
+      "builtup_sqft": 1450,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Kothrud?searchParam=W3sibGF0IjoxOC41MDc0LCJsb24iOjczLjgwNzcsInBsYWNlSWQiOiJDaElKbllTdk1yZV93anNSOEVULXMwaUxCOVEiLCJwbGFjZU5hbWUiOiJLb3RocnVkIn1d&radius=2.0&sharedAccomodation=0&city=pune&locality=Kothrud"
+    },
+    {
+      "id": "nb-023",
+      "title": "1 BHK Flat In Standalone Building, Hinjawadi Phase 1",
+      "area": "Hinjewadi Phase 1",
+      "address": "Phase-I, near Sanjeevani Multispeciality Hospital and opp. Shell Petrol Pump, Hinjewadi",
+      "bhk": "1 BHK",
+      "rent": 16000,
+      "deposit": 25000,
+      "builtup_sqft": 500,
+      "furnishing": "Unfurnished",
+      "preferred_tenants": "All",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Hinjewadi%20Phase%201?searchParam=W3sibGF0IjoxOC41OTA4LCJsb24iOjczLjczOTcsInBsYWNlSWQiOiJDaElKbTMwcmktZTd3anNSSWFoTVJYN0lnMEkiLCJwbGFjZU5hbWUiOiJIaW5qZXdhZGkgUGhhc2UgMSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Hinjewadi%20Phase%201"
+    },
+    {
+      "id": "nb-024",
+      "title": "2 BHK Apartment In Mittal High Mount, Hinjawadi",
+      "area": "Hinjewadi Phase 1",
+      "address": "Hinjewadi Phase 2, Pune",
+      "bhk": "2 BHK",
+      "rent": 25000,
+      "deposit": 100000,
+      "builtup_sqft": 660,
+      "furnishing": "Unfurnished",
+      "preferred_tenants": "All",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Hinjewadi%20Phase%201?searchParam=W3sibGF0IjoxOC41OTA4LCJsb24iOjczLjczOTcsInBsYWNlSWQiOiJDaElKbTMwcmktZTd3anNSSWFoTVJYN0lnMEkiLCJwbGFjZU5hbWUiOiJIaW5qZXdhZGkgUGhhc2UgMSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Hinjewadi%20Phase%201"
+    },
+    {
+      "id": "nb-025",
+      "title": "2 BHK Apartment In High Mont Society",
+      "area": "Hinjewadi Phase 1",
+      "address": "Highmont Rd, Phase 2, Hinjewadi Rajiv Gandhi Infotech Park, Hinjawadi, Pimpri-Chinchwad",
+      "bhk": "2 BHK",
+      "rent": 26000,
+      "deposit": 72000,
+      "builtup_sqft": 850,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "All",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Hinjewadi%20Phase%201?searchParam=W3sibGF0IjoxOC41OTA4LCJsb24iOjczLjczOTcsInBsYWNlSWQiOiJDaElKbTMwcmktZTd3anNSSWFoTVJYN0lnMEkiLCJwbGFjZU5hbWUiOiJIaW5qZXdhZGkgUGhhc2UgMSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Hinjewadi%20Phase%201"
+    },
+    {
+      "id": "nb-026",
+      "title": "2 BHK Apartment In West One A",
+      "area": "Hinjewadi Phase 1",
+      "address": "Hinjawadi Rd, Hinjewadi, Pune",
+      "bhk": "2 BHK",
+      "rent": 28000,
+      "deposit": 50000,
+      "builtup_sqft": 1050,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "All",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Hinjewadi%20Phase%201?searchParam=W3sibGF0IjoxOC41OTA4LCJsb24iOjczLjczOTcsInBsYWNlSWQiOiJDaElKbTMwcmktZTd3anNSSWFoTVJYN0lnMEkiLCJwbGFjZU5hbWUiOiJIaW5qZXdhZGkgUGhhc2UgMSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Hinjewadi%20Phase%201"
+    },
+    {
+      "id": "nb-027",
+      "title": "2 BHK Apartment In Sagar Accord",
+      "area": "Hinjewadi Phase 1",
+      "address": "Sakhare-Vasti Road, near Shivaji Chowk, Hinjawadi, Pune 411057",
+      "bhk": "2 BHK",
+      "rent": 35000,
+      "deposit": 75000,
+      "builtup_sqft": 950,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-10-14",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Hinjewadi%20Phase%201?searchParam=W3sibGF0IjoxOC41OTA4LCJsb24iOjczLjczOTcsInBsYWNlSWQiOiJDaElKbTMwcmktZTd3anNSSWFoTVJYN0lnMEkiLCJwbGFjZU5hbWUiOiJIaW5qZXdhZGkgUGhhc2UgMSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Hinjewadi%20Phase%201"
+    },
+    {
+      "id": "nb-028",
+      "title": "1 BHK Apartment In Earnest Green Life, Hinjewadi",
+      "area": "Hinjewadi Phase 1",
+      "address": "Marunji Road, Hinjewadi, Pune",
+      "bhk": "1 BHK",
+      "rent": 25000,
+      "deposit": 50000,
+      "builtup_sqft": 400,
+      "furnishing": "Unfurnished",
+      "preferred_tenants": "Family",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Hinjewadi%20Phase%201?searchParam=W3sibGF0IjoxOC41OTA4LCJsb24iOjczLjczOTcsInBsYWNlSWQiOiJDaElKbTMwcmktZTd3anNSSWFoTVJYN0lnMEkiLCJwbGFjZU5hbWUiOiJIaW5qZXdhZGkgUGhhc2UgMSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Hinjewadi%20Phase%201"
+    },
+    {
+      "id": "nb-029",
+      "title": "2 BHK Independent House In Hinjawadi",
+      "area": "Hinjewadi Phase 1",
+      "address": "Hinjawadi Rd, near Shivaji Chowk / Hinjawadi Chowk, Pune",
+      "bhk": "2 BHK",
+      "rent": 30000,
+      "deposit": 40000,
+      "builtup_sqft": 1100,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "All",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Hinjewadi%20Phase%201?searchParam=W3sibGF0IjoxOC41OTA4LCJsb24iOjczLjczOTcsInBsYWNlSWQiOiJDaElKbTMwcmktZTd3anNSSWFoTVJYN0lnMEkiLCJwbGFjZU5hbWUiOiJIaW5qZXdhZGkgUGhhc2UgMSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Hinjewadi%20Phase%201"
+    },
+    {
+      "id": "nb-030",
+      "title": "2 BHK Apartment In Vasant Utsav Society",
+      "area": "Hinjewadi Phase 1",
+      "address": "Near Shivaji Chowk, opposite Shell Petrol Pump, Hinjawadi Village, Pune 411057",
+      "bhk": "2 BHK",
+      "rent": 25000,
+      "deposit": 50000,
+      "builtup_sqft": 900,
+      "furnishing": "Fully Furnished",
+      "preferred_tenants": "Bachelor Male",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Hinjewadi%20Phase%201?searchParam=W3sibGF0IjoxOC41OTA4LCJsb24iOjczLjczOTcsInBsYWNlSWQiOiJDaElKbTMwcmktZTd3anNSSWFoTVJYN0lnMEkiLCJwbGFjZU5hbWUiOiJIaW5qZXdhZGkgUGhhc2UgMSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Hinjewadi%20Phase%201"
+    },
+    {
+      "id": "nb-031",
+      "title": "2 BHK Apartment In Shivaani Residency",
+      "area": "Balewadi",
+      "address": "Opposite Amar Tech Park, Balewadi, Pune",
+      "bhk": "2 BHK",
+      "rent": 35000,
+      "deposit": 75000,
+      "builtup_sqft": 1050,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "All",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Balewadi?searchParam=W3sibGF0IjoxOC41NzkzLCJsb24iOjczLjc2NjksInBsYWNlSWQiOiJDaElKblFrb1FUYTV3anNSWDVZcEdaQXVpVU0iLCJwbGFjZU5hbWUiOiJCYWxld2FkaSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Balewadi"
+    },
+    {
+      "id": "nb-032",
+      "title": "2 BHK Apartment In Royal Namoville",
+      "area": "Balewadi",
+      "address": "Royal Namoville, Balewadi, Pune, Maharashtra 411045",
+      "bhk": "2 BHK",
+      "rent": 32000,
+      "deposit": 60000,
+      "builtup_sqft": 550,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "All",
+      "available_from": "2026-09-29",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Balewadi?searchParam=W3sibGF0IjoxOC41NzkzLCJsb24iOjczLjc2NjksInBsYWNlSWQiOiJDaElKblFrb1FUYTV3anNSWDVZcEdaQXVpVU0iLCJwbGFjZU5hbWUiOiJCYWxld2FkaSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Balewadi"
+    },
+    {
+      "id": "nb-033",
+      "title": "3 BHK Apartment In Avon Vista",
+      "area": "Balewadi",
+      "address": "Avon Vista, National Highway 4, Patil Nagar, Balewadi, Pune",
+      "bhk": "3 BHK",
+      "rent": 45000,
+      "deposit": 100000,
+      "builtup_sqft": 1340,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "All",
+      "available_from": "2026-10-09",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Balewadi?searchParam=W3sibGF0IjoxOC41NzkzLCJsb24iOjczLjc2NjksInBsYWNlSWQiOiJDaElKblFrb1FUYTV3anNSWDVZcEdaQXVpVU0iLCJwbGFjZU5hbWUiOiJCYWxld2FkaSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Balewadi"
+    },
+    {
+      "id": "nb-034",
+      "title": "1 BHK Apartment In Down Town",
+      "area": "Mahalunge",
+      "address": "Survey No.6 & 7/54B, Near Balewadi Stadium, National Games Park, Mahalunge, Pune, Maharashtra 411045",
+      "bhk": "1 BHK",
+      "rent": 17000,
+      "deposit": 50000,
+      "builtup_sqft": 604,
+      "furnishing": "Unfurnished",
+      "preferred_tenants": "All",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Mahalunge?searchParam=W3sibGF0IjoxOC41NzkzLCJsb24iOjczLjc1MjksInBsYWNlSWQiOiJDaElKWmRBallFMjV3anNSckZfTVpocmtfbFUiLCJwbGFjZU5hbWUiOiJNYWhhbHVuZ2UifV0%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Mahalunge"
+    },
+    {
+      "id": "nb-035",
+      "title": "2 BHK Apartment In Vtp Belair, Mahalunge",
+      "area": "Mahalunge",
+      "address": "Bluewater, VTP Belair, Mahalunge, Pune",
+      "bhk": "2 BHK",
+      "rent": 27000,
+      "deposit": 50000,
+      "builtup_sqft": 636,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "All",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Mahalunge?searchParam=W3sibGF0IjoxOC41NzkzLCJsb24iOjczLjc1MjksInBsYWNlSWQiOiJDaElKWmRBallFMjV3anNSckZfTVpocmtfbFUiLCJwbGFjZU5hbWUiOiJNYWhhbHVuZ2UifV0%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Mahalunge"
+    },
+    {
+      "id": "nb-036",
+      "title": "2 BHK Apartment In Godrej Green Vistas",
+      "area": "Mahalunge",
+      "address": "HQF4+JCP, near Reliance Smart, BitMatic Systems, Mahalunge, Pune",
+      "bhk": "2 BHK",
+      "rent": 32000,
+      "deposit": 80000,
+      "builtup_sqft": 806,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "All",
+      "available_from": "2026-10-31",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Mahalunge?searchParam=W3sibGF0IjoxOC41NzkzLCJsb24iOjczLjc1MjksInBsYWNlSWQiOiJDaElKWmRBallFMjV3anNSckZfTVpocmtfbFUiLCJwbGFjZU5hbWUiOiJNYWhhbHVuZ2UifV0%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Mahalunge"
+    },
+    {
+      "id": "nb-037",
+      "title": "3 BHK Apartment In Ascent Building",
+      "area": "Baner",
+      "address": "Ascent Building, Baner, Pune",
+      "bhk": "3 BHK",
+      "rent": 38000,
+      "deposit": 100000,
+      "builtup_sqft": 1400,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner?searchParam=W3sibGF0IjoxOC41NjQyNDUyLCJsb24iOjczLjc3Njg1MTEsInBsYWNlSWQiOiJDaElKeTlOZDhNLS13anNSZmF0Xy01Y1NrYUUiLCJwbGFjZU5hbWUiOiJCYW5lciJ9XQ==&radius=2.0&sharedAccomodation=0&city=pune&locality=Baner&type=BHK3"
+    },
+    {
+      "id": "nb-038",
+      "title": "3 BHK Apartment In Supreme 7 Skye",
+      "area": "Baner",
+      "address": "Pan Card Club Road, Baner, Pune",
+      "bhk": "3 BHK",
+      "rent": 56000,
+      "deposit": 120000,
+      "builtup_sqft": 1340,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "All",
+      "available_from": "2026-09-29",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner?searchParam=W3sibGF0IjoxOC41NjQyNDUyLCJsb24iOjczLjc3Njg1MTEsInBsYWNlSWQiOiJDaElKeTlOZDhNLS13anNSZmF0Xy01Y1NrYUUiLCJwbGFjZU5hbWUiOiJCYW5lciJ9XQ==&radius=2.0&sharedAccomodation=0&city=pune&locality=Baner&type=BHK3"
+    },
+    {
+      "id": "nb-039",
+      "title": "3 BHK Apartment In Sarsan Nancy Hillview",
+      "area": "Baner",
+      "address": "Baner, Pune",
+      "bhk": "3 BHK",
+      "rent": 45000,
+      "deposit": 90000,
+      "builtup_sqft": 1090,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-10-14",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner?searchParam=W3sibGF0IjoxOC41NjQyNDUyLCJsb24iOjczLjc3Njg1MTEsInBsYWNlSWQiOiJDaElKeTlOZDhNLS13anNSZmF0Xy01Y1NrYUUiLCJwbGFjZU5hbWUiOiJCYW5lciJ9XQ==&radius=2.0&sharedAccomodation=0&city=pune&locality=Baner&type=BHK3"
+    },
+    {
+      "id": "nb-040",
+      "title": "3 BHK Apartment In Meera Residency",
+      "area": "Baner",
+      "address": "Meera Residency, Baner, Pune, Maharashtra 411045",
+      "bhk": "3 BHK",
+      "rent": 38000,
+      "deposit": 114000,
+      "builtup_sqft": 1300,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner?searchParam=W3sibGF0IjoxOC41NjQyNDUyLCJsb24iOjczLjc3Njg1MTEsInBsYWNlSWQiOiJDaElKeTlOZDhNLS13anNSZmF0Xy01Y1NrYUUiLCJwbGFjZU5hbWUiOiJCYW5lciJ9XQ==&radius=2.0&sharedAccomodation=0&city=pune&locality=Baner&type=BHK3"
+    },
+    {
+      "id": "nb-041",
+      "title": "3 BHK Apartment In Samartha Hieghts",
+      "area": "Baner",
+      "address": "Buchade Wasti, near Aakanksha International School, Marunji, Pune",
+      "bhk": "3 BHK",
+      "rent": 25000,
+      "deposit": 50000,
+      "builtup_sqft": 1500,
+      "furnishing": "Unfurnished",
+      "preferred_tenants": "Company",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner?searchParam=W3sibGF0IjoxOC41NjQyNDUyLCJsb24iOjczLjc3Njg1MTEsInBsYWNlSWQiOiJDaElKeTlOZDhNLS13anNSZmF0Xy01Y1NrYUUiLCJwbGFjZU5hbWUiOiJCYW5lciJ9XQ==&radius=2.0&sharedAccomodation=0&city=pune&locality=Baner&type=BHK3"
+    },
+    {
+      "id": "nb-042",
+      "title": "3 BHK Apartment In Royalstone Residency",
+      "area": "Baner",
+      "address": "Swapna Nagari, Society Rd, Sector 19, Gurudwara Colony, Nigdi, Pimpri-Chinchwad, Pune, Maharashtra 411035",
+      "bhk": "3 BHK",
+      "rent": 25000,
+      "deposit": 50000,
+      "builtup_sqft": 1050,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Baner?searchParam=W3sibGF0IjoxOC41NjQyNDUyLCJsb24iOjczLjc3Njg1MTEsInBsYWNlSWQiOiJDaElKeTlOZDhNLS13anNSZmF0Xy01Y1NrYUUiLCJwbGFjZU5hbWUiOiJCYW5lciJ9XQ==&radius=2.0&sharedAccomodation=0&city=pune&locality=Baner&type=BHK3"
+    },
+    {
+      "id": "nb-043",
+      "title": "3 BHK Apartment In Gagan Klara, Balewadi",
+      "area": "Balewadi",
+      "address": "Yashodha Chowk, Balewadi, Pune",
+      "bhk": "3 BHK",
+      "rent": 50000,
+      "deposit": 150000,
+      "builtup_sqft": 1000,
+      "furnishing": "Unfurnished",
+      "preferred_tenants": "All",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Balewadi?searchParam=W3sibGF0IjoxOC41NzkzLCJsb24iOjczLjc2NjksInBsYWNlSWQiOiJDaElKblFrb1FUYTV3anNSWDVZcEdaQXVpVU0iLCJwbGFjZU5hbWUiOiJCYWxld2FkaSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Balewadi&type=BHK3"
+    },
+    {
+      "id": "nb-044",
+      "title": "3 BHK Apartment In Nirmiti Zion, Balewadi",
+      "area": "Balewadi",
+      "address": "Nirmiti Zion, Balewadi, Pune-411045, Maharashtra",
+      "bhk": "3 BHK",
+      "rent": 49000,
+      "deposit": 125000,
+      "builtup_sqft": 1600,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Balewadi?searchParam=W3sibGF0IjoxOC41NzkzLCJsb24iOjczLjc2NjksInBsYWNlSWQiOiJDaElKblFrb1FUYTV3anNSWDVZcEdaQXVpVU0iLCJwbGFjZU5hbWUiOiJCYWxld2FkaSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Balewadi&type=BHK3"
+    },
+    {
+      "id": "nb-045",
+      "title": "3 BHK Apartment In Vtp Leonara, Mahalunge",
+      "area": "Mahalunge",
+      "address": "VTP Leonara, Mahalunge, Pune",
+      "bhk": "3 BHK",
+      "rent": 60000,
+      "deposit": 200000,
+      "builtup_sqft": 1010,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-10-31",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Mahalunge?searchParam=W3sibGF0IjoxOC41NzkzLCJsb24iOjczLjc1MjksInBsYWNlSWQiOiJDaElKWmRBallFMjV3anNSckZfTVpocmtfbFUiLCJwbGFjZU5hbWUiOiJNYWhhbHVuZ2UifV0%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Mahalunge&type=BHK3"
+    },
+    {
+      "id": "nb-046",
+      "title": "3 BHK Apartment In Skylark Apartment",
+      "area": "Wakad",
+      "address": "Wakad near Star Bazaar, Pimpri-Chinchwad, Pune",
+      "bhk": "3 BHK",
+      "rent": 45000,
+      "deposit": 90000,
+      "builtup_sqft": 1050,
+      "furnishing": "Unfurnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Wakad?searchParam=W3sibGF0IjoxOC41OTc1LCJsb24iOjczLjc2MjksInBsYWNlSWQiOiJDaElKN1J0WHIzcTV3anNSYzJhbnBXczBad3ciLCJwbGFjZU5hbWUiOiJXYWthZCJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Wakad&type=BHK3"
+    },
+    {
+      "id": "nb-047",
+      "title": "3 BHK Apartment In My Home Wakad",
+      "area": "Wakad",
+      "address": "My Home Wakad, behind Hotel Tip Top, Wakad, Pune",
+      "bhk": "3 BHK",
+      "rent": 40000,
+      "deposit": 75000,
+      "builtup_sqft": 989,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Wakad?searchParam=W3sibGF0IjoxOC41OTc1LCJsb24iOjczLjc2MjksInBsYWNlSWQiOiJDaElKN1J0WHIzcTV3anNSYzJhbnBXczBad3ciLCJwbGFjZU5hbWUiOiJXYWthZCJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Wakad&type=BHK3"
+    },
+    {
+      "id": "nb-048",
+      "title": "3 BHK Apartment In Park Astra, Hinjewadi",
+      "area": "Hinjewadi Phase 1",
+      "address": "Park District Road, Hinjewadi Phase 1, Pune",
+      "bhk": "3 BHK",
+      "rent": 45000,
+      "deposit": 90000,
+      "builtup_sqft": 880,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Hinjewadi%20Phase%201?searchParam=W3sibGF0IjoxOC41OTA4LCJsb24iOjczLjczOTcsInBsYWNlSWQiOiJDaElKbTMwcmktZTd3anNSSWFoTVJYN0lnMEkiLCJwbGFjZU5hbWUiOiJIaW5qZXdhZGkgUGhhc2UgMSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Hinjewadi%20Phase%201&type=BHK3"
+    },
+    {
+      "id": "nb-049",
+      "title": "3 BHK Apartment In Rahul Aston",
+      "area": "Hinjewadi Phase 1",
+      "address": "Rahul Aston - I, Main Hinjewadi Road, Hinjewadi, Pune, 411057",
+      "bhk": "3 BHK",
+      "rent": 46000,
+      "deposit": 96000,
+      "builtup_sqft": 953,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "All",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Hinjewadi%20Phase%201?searchParam=W3sibGF0IjoxOC41OTA4LCJsb24iOjczLjczOTcsInBsYWNlSWQiOiJDaElKbTMwcmktZTd3anNSSWFoTVJYN0lnMEkiLCJwbGFjZU5hbWUiOiJIaW5qZXdhZGkgUGhhc2UgMSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Hinjewadi%20Phase%201&type=BHK3"
+    },
+    {
+      "id": "nb-050",
+      "title": "3 BHK Apartment In Kolte Patil Green Olive",
+      "area": "Hinjewadi Phase 1",
+      "address": "Behind Persistent Systems, Phase 1, Hinjewadi, Pune",
+      "bhk": "3 BHK",
+      "rent": 48000,
+      "deposit": 120000,
+      "builtup_sqft": 1400,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "All",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Hinjewadi%20Phase%201?searchParam=W3sibGF0IjoxOC41OTA4LCJsb24iOjczLjczOTcsInBsYWNlSWQiOiJDaElKbTMwcmktZTd3anNSSWFoTVJYN0lnMEkiLCJwbGFjZU5hbWUiOiJIaW5qZXdhZGkgUGhhc2UgMSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Hinjewadi%20Phase%201&type=BHK3"
+    },
+    {
+      "id": "nb-051",
+      "title": "3 BHK Apartment In Xotech Homes",
+      "area": "Hinjewadi Phase 1",
+      "address": "273, Bhatewara Nagar, Hinjawadi, Maharashtra 411057",
+      "bhk": "3 BHK",
+      "rent": 35000,
+      "deposit": 105000,
+      "builtup_sqft": 1054,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "All",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Hinjewadi%20Phase%201?searchParam=W3sibGF0IjoxOC41OTA4LCJsb24iOjczLjczOTcsInBsYWNlSWQiOiJDaElKbTMwcmktZTd3anNSSWFoTVJYN0lnMEkiLCJwbGFjZU5hbWUiOiJIaW5qZXdhZGkgUGhhc2UgMSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Hinjewadi%20Phase%201&type=BHK3"
+    },
+    {
+      "id": "nb-052",
+      "title": "3 BHK Apartment In Krishna Amarillo",
+      "area": "Hinjewadi Phase 1",
+      "address": "Krishna Amarillo, Hinjewadi, Pune",
+      "bhk": "3 BHK",
+      "rent": 37000,
+      "deposit": 100000,
+      "builtup_sqft": 1263,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "All",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Hinjewadi%20Phase%201?searchParam=W3sibGF0IjoxOC41OTA4LCJsb24iOjczLjczOTcsInBsYWNlSWQiOiJDaElKbTMwcmktZTd3anNSSWFoTVJYN0lnMEkiLCJwbGFjZU5hbWUiOiJIaW5qZXdhZGkgUGhhc2UgMSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Hinjewadi%20Phase%201&type=BHK3"
+    },
+    {
+      "id": "nb-053",
+      "title": "3 BHK Apartment In Royal Entrada",
+      "area": "Hinjewadi Phase 1",
+      "address": "Near Essentia Hotel, Wakad-Hinjewadi Road, Pune",
+      "bhk": "3 BHK",
+      "rent": 40000,
+      "deposit": 100000,
+      "builtup_sqft": 1086,
+      "furnishing": "Fully Furnished",
+      "preferred_tenants": "Family",
+      "available_from": "2026-10-16",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Hinjewadi%20Phase%201?searchParam=W3sibGF0IjoxOC41OTA4LCJsb24iOjczLjczOTcsInBsYWNlSWQiOiJDaElKbTMwcmktZTd3anNSSWFoTVJYN0lnMEkiLCJwbGFjZU5hbWUiOiJIaW5qZXdhZGkgUGhhc2UgMSJ9XQ%3D%3D&radius=2.0&sharedAccomodation=0&city=pune&locality=Hinjewadi%20Phase%201&type=BHK3"
+    },
+    {
+      "id": "nb-054",
+      "title": "3 BHK Apartment In Indradhanu Society",
+      "area": "Kothrud",
+      "address": "Vanaz, Kothrud, Pune",
+      "bhk": "3 BHK",
+      "rent": 45000,
+      "deposit": 150000,
+      "builtup_sqft": 1500,
+      "furnishing": "Fully Furnished",
+      "preferred_tenants": "All",
+      "available_from": "Ready to Move",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Kothrud?searchParam=W3sibGF0IjoxOC41MDc0LCJsb24iOjczLjgwNzcsInBsYWNlSWQiOiJDaElKbllTdk1yZV93anNSOEVULXMwaUxCOVEiLCJwbGFjZU5hbWUiOiJLb3RocnVkIn1d&radius=2.0&sharedAccomodation=0&city=pune&locality=Kothrud&type=BHK3"
+    },
+    {
+      "id": "nb-055",
+      "title": "3 BHK Flat In Aboli Villa, Paud Road",
+      "area": "Kothrud",
+      "address": "Ramchandra Mane Road, Paud Road, near Utsav Hall, Vanaz, Kothrud, Pune",
+      "bhk": "3 BHK",
+      "rent": 64000,
+      "deposit": 180000,
+      "builtup_sqft": 1350,
+      "furnishing": "Semi Furnished",
+      "preferred_tenants": "All",
+      "available_from": "2026-09-30",
+      "lift": null,
+      "parking": null,
+      "source_url": "https://www.nobroker.in/property/rent/pune/Kothrud?searchParam=W3sibGF0IjoxOC41MDc0LCJsb24iOjczLjgwNzcsInBsYWNlSWQiOiJDaElKbllTdk1yZV93anNSOEVULXMwaUxCOVEiLCJwbGFjZU5hbWUiOiJLb3RocnVkIn1d&radius=2.0&sharedAccomodation=0&city=pune&locality=Kothrud&type=BHK3"
     }
-  ],
-
-  /* The preference vocabulary. Kept closed on purpose: a preference the engine
-     cannot check against a field is a preference the engine must not score. */
-  preferenceVocabulary: [
-    'Balcony',
-    'Gym in society',
-    'Covered parking',
-    'Power backup',
-    '24x7 water',
-    'Near a park',
-    'Quiet street',
-    'Semi or fully furnished',
-    'Three bathrooms'
   ]
-};
+}
+;
+
+  /* --------------------------- normalisation --------------------------- */
+
+  /* Area labels contradicted by the record's own address. Travel time is
+     derived from the label, so a wrong label yields a confident wrong commute.
+     Flagged rather than silently corrected: guessing the real area would be
+     the same class of mistake in the other direction. */
+  var AREA_DOUBTS = {
+    'nb-008': 'Tagged Balewadi; address reads Balewadi Phata, Baner.',
+    'nb-012': 'Tagged Hinjewadi Phase 1; address reads Bhumkar Chowk, Wakad.',
+    'nb-020': 'Tagged Kothrud; address reads Sus Gaon, which is the other side of the city.',
+    'nb-024': 'Tagged Hinjewadi Phase 1; address reads Phase 2.',
+    'nb-025': 'Tagged Hinjewadi Phase 1; address reads Phase 2.',
+    'nb-028': 'Tagged Hinjewadi Phase 1; address reads Marunji Road.',
+    'nb-041': 'Tagged Baner; address reads Marunji.',
+    'nb-042': 'Tagged Baner; address reads Nigdi, which is well north of Baner.',
+    'nb-053': 'Tagged Hinjewadi Phase 1; address reads Wakad-Hinjewadi Road.'
+  };
+
+  function bedrooms(bhk) {
+    var m = /^(\d+)/.exec(String(bhk || ''));
+    return m ? parseInt(m[1], 10) : null;
+  }
+
+  var items = RAW.listings.map(function (l) {
+    return {
+      id: l.id,
+      title: l.title,
+      area: l.area,
+      microLocation: l.address,
+      bhkLabel: l.bhk,
+      bedrooms: bedrooms(l.bhk),
+      rent: l.rent,
+      /* NoBroker's list view does not break out maintenance. Treated as zero
+         rather than invented, and called out on the option so nobody budgets
+         as though it were settled. */
+      maintenance: 0,
+      maintenanceStated: false,
+      deposit: l.deposit,
+      sqft: l.builtup_sqft,
+      furnishing: l.furnishing,
+      tenants: l.preferred_tenants,
+      availableFrom: l.available_from,
+      /* All four genuinely absent from the source for every record. */
+      bathrooms: null,
+      floor: null,
+      totalFloors: null,
+      lift: l.lift,
+      parking: l.parking,
+      petFriendly: null,
+      sourceUrl: l.source_url,
+      areaDoubt: AREA_DOUBTS[l.id] || null
+    };
+  });
+
+  return {
+    meta: {
+      provenance: 'live scrape of nobroker.in',
+      fetchedAt: RAW.fetched_at,
+      source: RAW.source,
+      market: 'Pune, India',
+      currency: 'INR',
+      notLiveFeed: false,
+      unstatedFields: ['lift', 'parking', 'bathrooms', 'floor', 'maintenance'],
+      scrapeNote: RAW._readme
+    },
+
+    items: items,
+
+    verifySearch: {
+      'Baner':             'https://www.nobroker.in/property/rent/pune/Baner',
+      'Balewadi':          'https://www.nobroker.in/property/rent/pune/Balewadi',
+      'Mahalunge':         'https://www.nobroker.in/property/rent/pune/Mahalunge',
+      'Wakad':             'https://www.nobroker.in/property/rent/pune/Wakad',
+      'Hinjewadi Phase 1': 'https://www.nobroker.in/property/rent/pune/Hinjewadi%20Phase%201',
+      'Kothrud':           'https://www.nobroker.in/property/rent/pune/Kothrud'
+    },
+
+    /* Closed vocabulary, and every entry maps onto a field the scrape actually
+       returns. A preference the engine cannot check is a preference it must
+       not pretend to score, so amenity-style wishes (balcony, gym, park) are
+       deliberately absent: NoBroker's list view never states them. */
+    preferenceVocabulary: [
+      'Fully furnished',
+      'Semi or fully furnished',
+      'Ready to move in',
+      'Over 1000 sq ft',
+      'Deposit under 2.5x the rent',
+      'Open to all tenant types'
+    ]
+  };
+})();

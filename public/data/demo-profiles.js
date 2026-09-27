@@ -49,7 +49,7 @@ window.HM_DEMO_PROFILES = [
         assumptionNote: 'The 20-minute promise in the case, kept at 25 to match the number she gave the group.'
       }
     ],
-    preferences: ['Balcony', 'Gym in society', 'Near a park', 'Covered parking'],
+    preferences: ['Over 1000 sq ft', 'Ready to move in', 'Open to all tenant types'],
     flexibleBudget: false,
     intakeNotes: 'Wants Baner, but what she actually needs is the 25-minute radius. Those are different inputs, and separating them is what gives her room to move.'
   },
@@ -71,7 +71,7 @@ window.HM_DEMO_PROFILES = [
         assumptionNote: 'The case rules out 45 minutes each way but never states her actual ceiling. 25 minutes is the working figure; the phase is taken as Phase 1.'
       }
     ],
-    preferences: ['Power backup', '24x7 water', 'Covered parking'],
+    preferences: ['Deposit under 2.5x the rent', 'Ready to move in'],
     flexibleBudget: false,
     intakeNotes: 'Tightest ceiling in the group at 16,000, which quietly sets the rent limit for all three under an equal split.'
   },
@@ -87,7 +87,7 @@ window.HM_DEMO_PROFILES = [
     preferredArea: 'Kothrud',
     mustHaves: { lift: true, parking: false, petFriendly: false, minBathrooms: 2 },
     destinations: [],
-    preferences: ['Semi or fully furnished', 'Balcony', 'Quiet street'],
+    preferences: ['Semi or fully furnished', 'Fully furnished', 'Over 1000 sq ft'],
     flexibleBudget: true,
     intakeNotes: 'Knee condition, so the lift is absolute and the budget is the flexible one. Kothrud was a flat she found, not a place she needs to live.'
   }

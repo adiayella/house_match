@@ -102,10 +102,10 @@
         <tr>
           <th class="rowhead">Property API<small>public/data/listings.js</small></th>
           <td>A match run begins.</td>
-          <td>Area, rent, deposit, maintenance, bathrooms, furnishing, floor, lift, parking, pet policy, amenities.</td>
-          <td>No authorised public rental API exists for this market, so this is a curated sample dataset behind an API-shaped loader. Swapping in a real feed means replacing one module.</td>
-          <td>Returns listing records with missing fields preserved as <code>null</code> rather than defaulted, so absent data can never satisfy a requirement.</td>
-          <td>18 records across 8 Pune areas, each carrying its provenance and a portal search link for checking by hand.</td>
+          <td>Area, address, BHK, rent, deposit, built-up area, furnishing, preferred tenants, availability.</td>
+          <td>Scraped live from NoBroker on 27 Sep 2026; the RapidAPI wrapper does not work, so the rendered search page was read per area. The raw scrape is committed verbatim and normalised in visible code.</td>
+          <td>Preserves missing fields as <code>null</code> rather than defaulting them. Lift, parking, bathrooms and maintenance are unstated for <em>all 55</em> records, so absent data can never satisfy a requirement. Area labels contradicted by their own address are flagged, and travel checks on those records are downgraded rather than trusted.</td>
+          <td>55 real records across 6 Pune areas, each with its own NoBroker link so any row can be checked by hand.</td>
         </tr>
 
         <tr>

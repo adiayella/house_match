@@ -187,12 +187,22 @@ web page and the bot could eventually disagree about whether a flat qualifies.
 
 ## Honest limitations
 
-**The listings are a curated sample dataset, not a live feed.** No authorised public rental API
-exists for this market, so inventing one — or scraping a portal and presenting the result as
-verified inventory — would be worse than saying so. Rents and amenity mixes are representative of
-3BHK rentals in these Pune areas; each row is a stand-in rather than a specific advertised flat,
-and no row claims a deep link to a real advert. `public/data/listings.js` sits behind an
-API-shaped loader, so swapping in a real feed means replacing one module.
+**The listings are real, and thin.** 55 properties scraped from NoBroker on 27 September 2026 by
+reading the rendered search page per area (the RapidAPI wrapper does not work). The raw scrape is
+committed verbatim inside `public/data/listings.js` and every transformation applied to it is
+visible in the normalisation code beneath it — nothing was tidied by hand.
+
+But the list view states **lift, parking, bathroom count and maintenance for none of the 55**. So
+every shortlisted flat carries an explicit *needs verification* line on each of those, and the
+per-person share is rent-only and therefore a floor rather than a final figure. This is the rule
+earning its keep rather than a gap in it: the alternative is telling someone with a knee condition
+that a flat is fine when nobody ever checked.
+
+**Nine records carry an area label their own address contradicts** — one tagged Kothrud whose
+address is in Sus, several tagged Hinjewadi Phase 1 that read Phase 2. Since travel time is
+computed from the label, a wrong label yields a confident wrong commute. Those records are listed
+in `AREA_DOUBTS` and their travel checks are downgraded to *needs verification* rather than
+silently corrected — guessing the real area would be the same mistake in the other direction.
 
 **Travel figures are area-to-area planning estimates, not live routes.** Synthesised from
 published Pune commute guides and expressed as ranges. A range that straddles somebody's limit
