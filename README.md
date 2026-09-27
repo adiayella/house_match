@@ -67,63 +67,91 @@ wording. The product degrades in fluency, never in accuracy.
 
 ---
 
+## Two interfaces, one engine
+
+| | Web app | Telegram bot |
+|---|---|---|
+| Where | `/app` | `@your_bot` |
+| Who enters answers | Add all three yourself, or send a share link | `/start` yourself, `/add` for others |
+| Needs | nothing (Supabase only for share links) | bot token; Supabase for the real flow |
+
+Both load the same `public/assets/match.js`. They cannot disagree about whether a flat qualifies,
+because there is only one implementation of the rules.
+
+---
+
 ## Setup
 
-You need a GitHub account, a Vercel account, and Telegram. Supabase and Gemini are optional but
-recommended. There is **no build step and no `npm install`** — what is committed is what runs.
+You need a GitHub account and a Vercel account. Everything else is optional. There is **no build
+step and no `npm install`** — what is committed is what runs.
 
-### 1. Create the bot
+### The short version
 
-Message [@BotFather](https://t.me/BotFather) on Telegram, send `/newbot`, follow the prompts, and
-copy the token it gives you.
+Import the repo at [vercel.com/new](https://vercel.com/new), framework preset **Other**, leave
+build and output settings empty. Deploy.
 
-### 2. Deploy to Vercel
+**That is a working app.** `/app` lets you add three people and see the shortlist, with matching
+running entirely in the browser. Nothing below is required for that.
 
-Import this repository at [vercel.com/new](https://vercel.com/new). Framework preset: **Other**.
-Leave the build and output settings empty.
+Add the optional pieces only for what you actually need:
 
-### 3. Set environment variables
+| You want | Add |
+|---|---|
+| Plain-English tradeoff write-ups | `GEMINI_API_KEY` |
+| Share links so three people answer on their own devices | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` + run `schema.sql` |
+| The Telegram bot | `TELEGRAM_BOT_TOKEN` + `SETUP_KEY`, then visit `/api/setup?key=...` |
 
-In the Vercel project: **Settings → Environment Variables**. See `.env.example` for the full list
-with explanations.
+Redeploy after adding variables — **Vercel does not apply new variables to an existing
+deployment**, and this is the step people miss.
 
-| Variable | Needed? | What it is |
+### Checking it worked
+
+`/api/health` reports what is configured without echoing any secret.
+
+`/api/health?deep=1` goes further: it makes a **real call to Gemini** and a **real query against
+Supabase**. Having a key set proves nothing about whether it is valid, and having a database URL
+proves nothing about whether `schema.sql` was ever run. Both are billed or billable requests, so
+they are off by default.
+
+### Every variable
+
+See `.env.example` for the same list with fuller explanations.
+
+| Variable | Needed for | What it is |
 |---|---|---|
-| `TELEGRAM_BOT_TOKEN` | **Required** | From @BotFather |
-| `SETUP_KEY` | **Required** | Any long random string you invent; guards the setup endpoint |
-| `TELEGRAM_WEBHOOK_SECRET` | Recommended | Another random string; Telegram signs every webhook call with it |
-| `SUPABASE_URL` | Recommended | From your Supabase project, Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | Recommended | Same page. Server-side only — never put this in a browser |
-| `TELEGRAM_GROUP_CHAT_ID` | Optional | Or just send `/usegroup` in the group instead |
-| `GEMINI_API_KEY` | Optional | From [aistudio.google.com](https://aistudio.google.com) |
+| `GEMINI_API_KEY` | Tradeoff write-ups | From [aistudio.google.com](https://aistudio.google.com) |
+| `GEMINI_MODEL` | — | Defaults to `gemini-3.8-flash`. Leave unset unless you want another. |
+| `SUPABASE_URL` | Share links, Telegram | `https://xxxx.supabase.co`, from Settings → API |
+| `SUPABASE_SERVICE_ROLE_KEY` | Share links, Telegram | Same page. **Server-side only.** It bypasses row-level security. |
+| `TELEGRAM_BOT_TOKEN` | Telegram | From [@BotFather](https://t.me/BotFather): `/newbot` |
+| `SETUP_KEY` | Telegram | A random string you invent; guards `/api/setup` |
+| `TELEGRAM_WEBHOOK_SECRET` | Telegram | Another random string. Set it **before** running `/api/setup`. |
+| `TELEGRAM_GROUP_CHAT_ID` | — | Optional. Or send `/usegroup` in the group instead. |
 
-Redeploy after adding them — Vercel does not apply new variables to an existing deployment.
+### Supabase
 
-### 4. Set up the database (recommended)
+Create a project at [supabase.com](https://supabase.com), open the **SQL editor**, paste all of
+`schema.sql`, run it. Then copy the URL and the `service_role` key from **Settings → API**.
 
-Create a project at [supabase.com](https://supabase.com), open the SQL editor, paste the whole of
-`schema.sql` and run it. Then copy the URL and service role key into Vercel.
+Three tables, RLS on, no public policy: the anon key can read nothing, so one participant cannot
+pull another's answers out of the database before the match runs.
 
-**If you skip this**, the bot holds answers in memory inside one warm serverless instance. They
-can vanish between messages, and two people answering at the same time may land on different
-instances and never see each other. Fine for a two-minute demo; not fine for real use. The bot
-tells people on screen when it's in this mode, and `/api/health` reports it.
+Without Supabase, the web app still works for one person filling in all three sets of answers —
+only share links and the real Telegram flow need it.
 
-### 5. Point Telegram at the deployment
+### Telegram
 
-Visit, in a browser:
+Only if you want the bot as well as the web app.
 
-```
-https://YOUR-PROJECT.vercel.app/api/setup?key=YOUR_SETUP_KEY
-```
+1. `/newbot` in [@BotFather](https://t.me/BotFather), copy the token
+2. Add `TELEGRAM_BOT_TOKEN`, `SETUP_KEY` and `TELEGRAM_WEBHOOK_SECRET`, redeploy
+3. Visit `https://YOUR-PROJECT.vercel.app/api/setup?key=YOUR_SETUP_KEY`
+4. Message the bot `/start`, then `/add` for each other person
 
-It replies with the bot's username and confirms the webhook is live.
-
-### 6. Use it
-
-1. Each person opens a private chat with the bot and sends `/start`.
-2. Add the bot to your group chat and send `/usegroup` there once, so it knows where to post.
-3. When all three have finished, the shortlist posts itself to the group.
+**Order matters.** `/api/setup` registers the webhook secret *with Telegram*. Set
+`TELEGRAM_WEBHOOK_SECRET` first, or every update comes back `401 Unauthorized` — Telegram calls
+without the header the handler requires, and the bot silently never answers. If that happens,
+`/api/health` names the cause and the fix is to re-run `/api/setup`.
 
 ---
 
