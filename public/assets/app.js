@@ -114,9 +114,8 @@
       '<ul class="lines">' +
       '<li>' + pill('pass') + '<span class="txt">' +
         (gets.length ? gets.join(', ') : 'nothing beyond the basics') + '</span></li>' +
-      (gives.length
-        ? '<li>' + pill('fail') + '<span class="txt">' + gives.join(', ') + '</span></li>'
-        : '<li>' + pill('pass') + '<span class="txt">everything she asked for</span></li>') +
+      '<li>' + pill('fail') + '<span class="txt">' +
+        (gives.length ? gives.join(', ') : 'nothing') + '</span></li>' +
       (p.bonuses && p.bonuses.length
         ? '<li>' + pill('bonus') + '<span class="txt">' + esc(p.bonuses.join(', ')) +
           ' <i>(didn’t ask for)</i></span></li>'

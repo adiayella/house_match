@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HouseMatch</title>
+<meta name="description" content="Everyone states what they need, then the flats that qualify are shown with exactly who is compromising on what.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#127968;</text></svg>">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand">HouseMatch <small>PUNE &middot; SHARED FLAT</small></div>
+    <nav>
+      <a href="#" data-go="people" class="on">People</a>
+      <a href="#" data-go="results">Shortlist</a>
+      <a href="components-map.html">Components map</a>
+      <a href="index.html">About</a>
+      <button id="theme-toggle" title="Switch light and dark">Theme</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ================================ PEOPLE ============================== -->
+  <section class="step on" id="step-people">
+    <div class="lede">
+      <h1>Who is looking, and what does each of you need?</h1>
+      <p>Add each person and what they actually require. Nothing is matched until you run it,
+      and a flat only qualifies if it satisfies <em>everyone&rsquo;s</em> non-negotiables.</p>
+    </div>
+
+    <div class="notice">
+      <strong>Two ways to do this.</strong> Add all three yourself if you already know what they
+      need &mdash; answers you enter for someone else are labelled, so the group can see which
+      ones to go back and confirm. Or create a shared group and send the others a link, and each
+      of them fills in her own form. Nobody sees anybody else&rsquo;s answers until all three are in.
+    </div>
+
+    <div class="card">
+      <div class="card-h"><h3>In so far</h3></div>
+      <div class="people" id="people-strip"></div>
+      <div class="btnrow">
+        <button class="btn primary" id="add-person">Add a person</button>
+        <button class="btn" id="run-match" disabled>Find the options</button>
+        <button class="btn ghost" id="share-group">Share with the others</button>
+        <button class="btn ghost" id="clear-all">Clear</button>
+      </div>
+      <p class="muted" id="people-hint" style="margin-top:10px"></p>
+    </div>
+
+    <div class="card" id="share-box" style="display:none">
+      <h3>Shared group</h3>
+      <p class="tight muted" id="share-msg"></p>
+      <label for="share-link">Send this to the others</label>
+      <input type="text" id="share-link" readonly class="mono">
+      <div class="btnrow">
+        <button class="btn sm" id="copy-link">Copy link</button>
+        <button class="btn sm ghost" id="refresh-group">Check who has answered</button>
+      </div>
+    </div>
+
+    <details>
+      <summary>How the rent is split, and why it is checked per person</summary>
+      <p>Rent is divided equally, then each share is checked against <em>that person&rsquo;s own</em>
+      ceiling. A flat is affordable only when it is affordable for everyone independently.</p>
+      <p class="tight">Adding the budgets together and comparing the total to the rent would pass
+      flats that quietly overcommit whoever has the smallest budget. Under an equal split, the
+      tightest ceiling in the group sets the rent limit for all three &mdash; worth knowing out
+      loud rather than discovering in month two.</p>
+    </details>
+
+    <details>
+      <summary>Traffic</summary>
+      <p>Journeys are checked at weekday office hours by default, because that is when the
+      commute that matters actually happens.</p>
+      <div class="row" style="max-width:300px">
+        <div>
+          <label for="traffic">Check journeys at</label>
+          <select id="traffic">
+            <option value="peak" selected>Weekday office hours</option>
+            <option value="offPeak">Lighter traffic</option>
+          </select>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ================================= FORM =============================== -->
+  <section class="step" id="step-form">
+    <div class="lede">
+      <h1 id="form-title">Their requirements</h1>
+      <p id="form-sub">Answer for what they actually need, not what you think they should want.</p>
+    </div>
+
+    <form id="person-form" autocomplete="off">
+      <div class="card">
+        <h3>Who</h3>
+        <div class="row">
+          <div>
+            <label for="f-name">Name</label>
+            <input type="text" id="f-name" required placeholder="e.g. Riya" maxlength="40">
+          </div>
+          <div>
+            <label for="f-role">Part in this</label>
+            <select id="f-role">
+              <option value="participant">Participant</option>
+              <option value="coordinator">Coordinator &mdash; organising the search</option>
+            </select>
+          </div>
+        </div>
+        <p class="muted" style="margin-top:8px">Coordinating carries no weight in the matching.
+        Nobody can override anybody else&rsquo;s dealbreakers.</p>
+      </div>
+
+      <div class="card">
+        <h3>Money</h3>
+        <div class="row">
+          <div>
+            <label for="f-share">Most they can pay per month
+              <span class="hint">Their share of the rent, in rupees.</span>
+            </label>
+            <input type="number" id="f-share" min="1000" step="500" required placeholder="18000">
+          </div>
+          <div>
+            <label for="f-deposit">Most they can put into the deposit
+              <span class="hint">Their share. Leave blank if there is no firm ceiling.</span>
+            </label>
+            <input type="number" id="f-deposit" min="0" step="5000" placeholder="110000">
+          </div>
+        </div>
+        <div class="checks" style="margin-top:12px">
+          <label><input type="checkbox" id="f-flexible">
+            <span>Budget is the thing they&rsquo;d move on
+              <span class="hint" style="display:block">Still give a number. A budget with no
+              figure cannot be checked against anything.</span>
+            </span></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>The building</h3>
+        <p class="tight muted">Only tick what genuinely has to be true. Anything here can
+        eliminate a flat on its own.</p>
+        <div class="checks two">
+          <label><input type="checkbox" id="mh-lift"><span>Must have a lift</span></label>
+          <label><input type="checkbox" id="mh-parking"><span>Must have parking</span></label>
+          <label><input type="checkbox" id="mh-pets"><span>Must allow pets</span></label>
+        </div>
+        <div class="row" style="margin-top:4px">
+          <div>
+            <label for="f-baths">Fewest bathrooms acceptable</label>
+            <select id="f-baths">
+              <option value="0">No requirement</option>
+              <option value="2" selected>At least 2</option>
+              <option value="3">At least 3</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Places they must be able to reach</h3>
+        <p class="tight muted">The one that usually goes unsaid until somebody has already fallen
+        for a flat. Give the destination and the longest journey they would actually accept.</p>
+        <div id="dest-rows"></div>
+        <div class="btnrow" style="margin-top:10px">
+          <button type="button" class="btn sm" id="add-dest">Add a place</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Areas they will not consider</h3>
+        <p class="tight muted">Leave everything unticked if they are open to all of them.</p>
+        <div class="checks two" id="area-checks"></div>
+      </div>
+
+      <div class="card">
+        <h3>Things they&rsquo;d like but could live without</h3>
+        <p class="tight muted">Every item is checked against a real field on the listing, which is
+        why the list is fixed rather than free text. These never eliminate a flat &mdash; they show
+        up as what is being given up.</p>
+        <div class="checks two" id="pref-checks"></div>
+        <label for="f-notes" style="margin-top:16px">Anything else the others should know
+          <span class="hint">Optional, and not scored.</span></label>
+        <textarea id="f-notes" maxlength="300"></textarea>
+      </div>
+
+      <div class="btnrow">
+        <button type="submit" class="btn primary">Save</button>
+        <button type="button" class="btn ghost" data-go="people">Cancel</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ================================ RESULTS ============================= -->
+  <section class="step" id="step-results">
+    <div class="btnrow" style="margin-top:0">
+      <button class="btn ghost" data-go="people">&larr; Back to the people</button>
+    </div>
+    <div id="results-out"></div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <p><strong>HouseMatch</strong> &mdash; a decision aid, not a decision. It ranks and explains; it
+  never picks. 55 real listings scraped from NoBroker on 27 September 2026; travel figures are
+  area-level planning estimates rather than live routes, and anything the source did not state is
+  shown as unconfirmed.</p>
+</footer>
+
+<script src="data/listings.js"></script>
+<script src="data/travel.js"></script>
+<script src="data/demo-profiles.js"></script>
+<script src="assets/match.js"></script>
+<script src="assets/studio.js"></script>
+</body>
+</html>
