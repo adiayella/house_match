@@ -82,6 +82,20 @@ module.exports = async function handler(req, res) {
         report.telegram.lastError = info.last_error_message;
         report.telegram.lastErrorAt = info.last_error_date
           ? new Date(info.last_error_date * 1000).toISOString() : null;
+
+        /* A 401 here has one overwhelmingly likely cause: the webhook was
+           registered before TELEGRAM_WEBHOOK_SECRET existed, so Telegram is
+           calling without the header the handler now insists on. Nothing is
+           broken and nothing needs weakening - the registration is just stale.
+           Saying so beats leaving someone to infer it from a bare 401. */
+        if (/401|unauthor/i.test(info.last_error_message)) {
+          report.telegram.diagnosis =
+            'Telegram is calling the webhook without the secret this deployment expects, ' +
+            'which happens when the webhook was registered before TELEGRAM_WEBHOOK_SECRET ' +
+            'was set, or when that value changed afterwards.';
+          report.telegram.fix = 'Re-run /api/setup?key=YOUR_SETUP_KEY to re-register the ' +
+            'webhook with the current secret.';
+        }
       }
       if (!info.url) {
         report.telegram.nextStep = 'Webhook not set. Visit /api/setup?key=YOUR_SETUP_KEY';
