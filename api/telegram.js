@@ -94,7 +94,9 @@ async function onMessage(msg) {
   if (!isPrivate) { return onGroupCommand(chatId, cmd, msg); }
 
   switch (cmd) {
-    case '/start':  return startIntake(chatId, msg.from);
+    case '/start':  return startIntake(chatId, msg.from, {});
+    case '/add':    return startIntake(chatId, msg.from, { forOther: true });
+    case '/people': return statusMessage(chatId);
     case '/help':   return helpPrivate(chatId);
     case '/status': return statusMessage(chatId);
     case '/cancel': return store.clearSession(chatId)
@@ -167,21 +169,51 @@ function blankProfile(from) {
   };
 }
 
-async function startIntake(chatId, from) {
-  var state = { step: 'name', profile: blankProfile(from) };
+/* Two ways in.
+ *
+ *   /start  answering for yourself
+ *   /add    entering someone else's requirements on their behalf
+ *
+ * The second is how a coordinator actually works. Riya has spent four months
+ * arguing about this; she knows what Meera and Kavita need. Making her wait for
+ * two other people to install a bot before she can see a single option would be
+ * the same delay the product exists to remove.
+ *
+ * Profiles are keyed on the person's NAME, not the Telegram account that typed
+ * them, which is what lets one account hold all three. The bot is candid about
+ * which mode a profile came from rather than implying answers were given
+ * privately when somebody entered them on another person's behalf. */
+async function startIntake(chatId, from, opts) {
+  opts = opts || {};
+  var state = { step: 'name', forOther: !!opts.forOther, profile: blankProfile(from) };
+  if (opts.forOther) { state.profile.name = ''; }
   await store.setSession(chatId, state);
 
-  await tg.sendMessage(chatId,
-    '<b>HouseMatch</b>\n\n' +
-    'I’ll ask you eleven short questions about what you need from a flat. ' +
-    'Your answers stay private — the others never see them, and I won’t put ' +
-    'anything in the group until all three of you have finished.\n\n' +
-    'Then you’ll get two or three flats that satisfy everything all three of you ' +
-    'said was non-negotiable, with what each of you gives up written down.\n\n' +
-    '<i>I won’t pick one. That part is yours.</i>\n\n' +
-    'Send /cancel at any point to stop.');
+  if (opts.forOther) {
+    await tg.sendMessage(chatId,
+      '<b>Adding someone else</b>\n\n' +
+      'Answer as them, for what <i>they</i> need — not what you think they should want. ' +
+      'Eleven short questions.\n\n' +
+      '<i>These will be marked as entered by you rather than given by them, so nobody ' +
+      'later mistakes your best guess for their own words.</i>\n\n' +
+      'Send /cancel to stop.');
+  } else {
+    await tg.sendMessage(chatId,
+      '<b>HouseMatch</b>\n\n' +
+      'I’ll ask you eleven short questions about what you need from a flat.\n\n' +
+      'Then you’ll get the flats that satisfy everything everyone said was ' +
+      'non-negotiable, with what each person gives up written down.\n\n' +
+      '<i>I won’t pick one. That part is yours.</i>\n\n' +
+      'Send /cancel at any point to stop.');
+  }
 
   return ask(chatId, 'name', state);
+}
+
+/* Name is the identity here, so it has to reduce to something stable. */
+function personKey(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '').slice(0, 40) || 'person';
 }
 
 function ask(chatId, step, state) {
@@ -189,6 +221,11 @@ function ask(chatId, step, state) {
 
   switch (step) {
     case 'name':
+      if (state.forOther) {
+        return tg.sendMessage(chatId,
+          '<b>1 of 11.</b> Whose requirements are these? Just a first name.\n\n' +
+          '<i>Every question after this one is about them.</i>');
+      }
       return tg.sendMessage(chatId,
         '<b>1 of 11.</b> What should I call you in the comparison?' +
         (p.name ? '\n\nSend <code>ok</code> to use <b>' + esc(p.name) + '</b>.' : ''));
@@ -310,6 +347,7 @@ async function advance(chatId, state, text, from) {
       else if (text.length > 40 || text.length < 1) {
         return tg.sendMessage(chatId, 'Just a first name is fine.');
       } else { p.name = text; }
+      if (state.forOther) { p.enteredBy = from.first_name || 'the coordinator'; }
       break;
 
     case 'budget': {
@@ -444,6 +482,7 @@ async function parseTravel(chatId, text, profile) {
  * ----------------------------------------------------------------------- */
 async function finishIntake(chatId, profile) {
   var groupId = await resolveGroupId();
+  profile.id = personKey(profile.name);
   await store.saveProfile(groupId, profile.id, profile);
   await store.clearSession(chatId);
 
@@ -451,15 +490,18 @@ async function finishIntake(chatId, profile) {
   var names = profiles.map(function (x) { return x.name; });
 
   await tg.sendMessage(chatId,
-    '<b>Locked in. Thank you.</b>\n\n' +
-    esc(names.length + ' of 3 answered' + (names.length ? ': ' + names.join(', ') : '') + '.') +
-    (names.length >= 3
-      ? '\n\nThat’s everyone — working out the options now.'
-      : '\n\nI’ll run it as soon as the others are done. Nothing goes to the group until then.') +
+    '<b>' + esc(profile.name) + ' is in.</b>\n\n' +
+    esc(names.length + ' so far: ' + names.join(', ')) + '\n\n' +
+    (names.length >= 2
+      ? 'Send /add for the next person, or /match to see the options with who you have.'
+      : 'Send /add to enter the next person’s requirements.') +
     (store.isDurable() ? '' :
-      '\n\n<i>Note: no database is configured, so answers are held in memory and may not ' +
-      'survive. See the README.</i>'));
+      '\n\n<b>Warning:</b> no database is configured, so these answers are held in memory ' +
+      'and can disappear between messages. Add Supabase before relying on this.'));
 
+  /* Runs itself at three, since that is the group in the scenario. Below that
+     it waits, because a shortlist built from one person's constraints is not
+     the thing anybody is trying to produce. /match overrides. */
   if (names.length >= 3) { return runMatch(chatId, {}); }
 }
 
@@ -474,12 +516,18 @@ async function statusMessage(chatId) {
   var profiles = await store.listProfiles(groupId);
   if (!profiles.length) {
     return tg.sendMessage(chatId,
-      'Nobody has filled it in yet.\n\nMessage me privately and send /start.');
+      'Nobody is in yet.\n\nSend /start for your own requirements, then /add for each ' +
+      'of the others.');
   }
   return tg.sendMessage(chatId,
-    '<b>' + profiles.length + ' of 3 answered</b>\n\n' +
-    profiles.map(function (p) { return '✓ ' + esc(p.name); }).join('\n') +
-    (profiles.length < 3 ? '\n\n<i>Waiting on the rest.</i>' : '\n\nSend /match to run it.'));
+    '<b>' + profiles.length + ' in</b>\n\n' +
+    profiles.map(function (p) {
+      return '✓ ' + esc(p.name) +
+        (p.enteredBy ? ' <i>(entered by ' + esc(p.enteredBy) + ')</i>' : '');
+    }).join('\n') +
+    (profiles.length < 3
+      ? '\n\nSend /add for the next person, or /match to run it with who you have.'
+      : '\n\nSend /match to run it.'));
 }
 
 /* ----------------------------------------------------------------------- *
@@ -616,9 +664,14 @@ async function onCallback(cq) {
 function helpPrivate(chatId) {
   return tg.sendMessage(chatId,
     '<b>HouseMatch</b>\n\n' +
-    'Send /start and I’ll take you through the form. It takes about two minutes.\n\n' +
+    'Two ways to use me.\n\n' +
+    '<b>Coordinating?</b> Send /start for your own requirements, then /add for each of ' +
+    'the others. You can enter all three yourself and see the options straight away.\n\n' +
+    '<b>Everyone answering separately?</b> Each person sends /start from their own ' +
+    'Telegram. Nobody sees anybody else’s answers.\n\n' +
     '/start — fill in your answers\n' +
-    '/status — who has answered so far\n' +
+    '/add — enter someone else’s requirements\n' +
+    '/status — who is in so far\n' +
     '/match — run it now\n' +
     '/why — what got ruled out and by whom\n' +
     '/demo — load the three profiles from the case and run it\n' +
