@@ -66,24 +66,33 @@
         <tr>
           <th class="rowhead">Riya<small>Coordinator</small></th>
           <td>Decides to fix the process rather than hunt for another listing.</td>
-          <td>Her own eleven answers, sent privately to the bot. Adds the bot to the group and sends <code>/usegroup</code> once.</td>
+          <td>Her own requirements, plus either the other two&rsquo;s or a share link sent to them.</td>
           <td>Four months, zero shortlisted flats. She organises, but holds no veto.</td>
           <td>Completes the same form as the other two. Her coordinator role is a label on the summary and carries no weight in the matching.</td>
-          <td>One confirmed profile, and a group chat the shortlist can be posted to.</td>
+          <td>A confirmed profile, and either a group code or all three sets of requirements.</td>
         </tr>
 
         <tr>
           <th class="rowhead">Meera &amp; Kavita<small>Participants</small></th>
-          <td>Each receives the bot link and sends <code>/start</code> privately.</td>
+          <td>Open the share link, or answer in the bot, or have their requirements entered for them.</td>
           <td>Rent ceiling, deposit ceiling, ruled-out areas, building requirements, destinations with a maximum journey time, preferences.</td>
           <td>Meera: knee condition, so a lift is absolute and her budget is the flexible figure. Kavita: Hinjewadi office and the tightest ceiling in the group.</td>
-          <td>Answer alone. Neither sees the other&rsquo;s answers, and nothing is sent to the group until all three are in.</td>
-          <td>Two more confirmed profiles, each one played back for confirmation before it is saved.</td>
+          <td>Answer alone; neither sees the other&rsquo;s answers until all three are in, which is enforced server-side rather than in the page. Requirements entered on their behalf are labelled as second-hand.</td>
+          <td>Two more profiles, each played back for confirmation before it is saved.</td>
         </tr>
 
         <tr>
-          <th class="rowhead">Flat Search App<small>api/telegram.js<br>public/assets/match.js</small></th>
-          <td>The third profile is saved, or someone sends <code>/match</code>.</td>
+          <th class="rowhead">Interface<small>public/app.html<br>api/telegram.js</small></th>
+          <td>Someone opens <code>/app</code>, or messages the bot.</td>
+          <td>The eleven questions, as a web form or as a chat conversation.</td>
+          <td>Two front doors onto one engine, so they can never disagree about whether a flat qualifies.</td>
+          <td><b>Web:</b> add people, run it, see the shortlist; matching runs in the browser, so it is instant and works offline. <b>Telegram:</b> <code>/start</code>, <code>/add</code>, <code>/match</code>, <code>/why</code>, with votes per option.</td>
+          <td>The same shortlist either way.</td>
+        </tr>
+
+        <tr>
+          <th class="rowhead">Flat Search App<small>public/assets/match.js</small></th>
+          <td>All requirements are in, or a run is asked for.</td>
           <td>Three profiles and the listing records.</td>
           <td>Equal three-way split; journeys checked at weekday office hours; missing fields treated as unknown.</td>
           <td>Splits the rent and checks each share against <em>that person&rsquo;s own</em> ceiling; eliminates anything breaking a stated non-negotiable; scores preferences and travel; ranks on the <em>worst-off</em> person rather than the average.</td>
@@ -91,12 +100,12 @@
         </tr>
 
         <tr>
-          <th class="rowhead">Gemini<small>LLM &middot; lib/gemini.js</small></th>
+          <th class="rowhead">Gemini<small>LLM &middot; lib/gemini.js<br>api/narrate.js</small></th>
           <td>Someone types a travel answer in their own words, or a ranked option needs writing up.</td>
           <td>The raw sentence at intake; afterwards, the verdict the engine has already reached.</td>
           <td>The closed destination list, and each person&rsquo;s passes, failures and open questions.</td>
           <td><b>Reads</b> a typed answer into a structured suggestion, asking rather than guessing when no time limit was given. <b>Writes</b> the tradeoff in plain English. <b>Never decides.</b> It cannot see the filtering and nothing it returns re-enters eligibility.</td>
-          <td>A clarifying question, or two or three sentences naming who is compromising on what. If the key is absent the bot falls back to deterministic wording and matching is unaffected.</td>
+          <td>A clarifying question, or two or three sentences naming who is compromising on what. Called server-side so the key never reaches a browser, and returned after the shortlist is already on screen, so a slow or missing model delays nothing. Without a key the wording falls back to deterministic text and matching is unaffected.</td>
         </tr>
 
         <tr>
@@ -109,12 +118,12 @@
         </tr>
 
         <tr>
-          <th class="rowhead">Supabase<small>Database &middot; lib/store.js</small></th>
-          <td>Somebody answers a question, completes the form, or votes on an option.</td>
-          <td>Profiles, in-progress form state, and interested / discuss / reject votes.</td>
-          <td>Serverless functions keep nothing between requests, so all state lives here. Row level security is on with no public policy.</td>
-          <td>Reads and writes over PostgREST using the service role. One participant cannot read another&rsquo;s answers out of the database before the match runs.</td>
-          <td>Durable profiles, resumable conversations and a vote tally. Without it the bot falls back to memory and says so on screen.</td>
+          <th class="rowhead">Supabase<small>Database &middot; lib/store.js<br>api/group.js</small></th>
+          <td>Somebody joins a shared group, answers a question, or votes on an option.</td>
+          <td>Profiles keyed by group code, in-progress form state, and interested / discuss / reject votes.</td>
+          <td>Serverless functions keep nothing between requests, so all shared state lives here. Row level security is on with no public policy, so the anon key can read nothing.</td>
+          <td>Reads and writes over PostgREST using the service role. <b>The seal is enforced here:</b> a browser asking for the full profile set before everyone is in is refused. In the page that check would be readable from the network tab, and seeing the others first is how people end up tailoring their own answers to somebody else&rsquo;s.</td>
+          <td>Durable profiles, share links across devices, and a vote tally. Without it the web app still works for one person entering all three sets, and says so.</td>
         </tr>
 
         <tr>
