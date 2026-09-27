@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Components Map</title>
+<meta name="description" content="Section B components map for the HouseMatch shared-flat search: trigger, input, context, processing and output for every part of the system.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128506;</text></svg>">
+<link rel="stylesheet" href="assets/styles.css">
+<style>
+  .map-table { font-size: 13px; }
+  .map-table th, .map-table td { padding: 10px 11px; border: 1px solid var(--border); vertical-align: top; }
+  .map-table thead th { background: var(--surface-2); font-size: 11px; }
+  .map-table th.rowhead {
+    background: var(--surface-2); width: 152px; font-size: 13px;
+    text-transform: none; letter-spacing: 0; color: var(--text); white-space: normal;
+  }
+  .map-table th.rowhead small { display: block; font-weight: 400; color: var(--text-3); font-size: 11.5px; margin-top: 2px; }
+  .map-table td { color: var(--text-2); }
+  .map-table tbody tr:hover { background: transparent; }
+  @media print { @page { size: A3 landscape; margin: 10mm; } }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand">HouseMatch <small>COMPONENTS MAP</small></div>
+    <nav>
+      <a href="index.html">Back to the tool</a>
+      <button onclick="window.print()">Print / save as image</button>
+      <button id="theme-toggle" title="Switch light and dark">Theme</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="lede">
+    <h1>Section B &mdash; Flat Search</h1>
+    <p>Every part of the running system, and what each one is handed, holds, does and returns.
+    This describes what is actually deployed rather than an intended design: each row corresponds
+    to code in the repository.</p>
+  </div>
+
+  <div class="notice">
+    <strong>The load-bearing split.</strong> Eligibility is decided in deterministic code
+    (<code>public/assets/match.js</code>). Gemini is used only at the edges &mdash; reading a typed
+    answer at intake, and writing the tradeoff up afterwards. It is never asked whether a flat
+    qualifies, so no non-negotiable can be paraphrased away.
+  </div>
+
+  <div class="tbl-scroll">
+    <table class="map-table">
+      <thead>
+        <tr>
+          <th class="rowhead">Component</th>
+          <th>Trigger</th>
+          <th>Input</th>
+          <th>Context</th>
+          <th>Processing</th>
+          <th>Output</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <th class="rowhead">Riya<small>Coordinator</small></th>
+          <td>Decides to fix the process rather than hunt for another listing.</td>
+          <td>Her own eleven answers, sent privately to the bot. Adds the bot to the group and sends <code>/usegroup</code> once.</td>
+          <td>Four months, zero shortlisted flats. She organises, but holds no veto.</td>
+          <td>Completes the same form as the other two. Her coordinator role is a label on the summary and carries no weight in the matching.</td>
+          <td>One confirmed profile, and a group chat the shortlist can be posted to.</td>
+        </tr>
+
+        <tr>
+          <th class="rowhead">Meera &amp; Kavita<small>Participants</small></th>
+          <td>Each receives the bot link and sends <code>/start</code> privately.</td>
+          <td>Rent ceiling, deposit ceiling, ruled-out areas, building requirements, destinations with a maximum journey time, preferences.</td>
+          <td>Meera: knee condition, so a lift is absolute and her budget is the flexible figure. Kavita: Hinjewadi office and the tightest ceiling in the group.</td>
+          <td>Answer alone. Neither sees the other&rsquo;s answers, and nothing is sent to the group until all three are in.</td>
+          <td>Two more confirmed profiles, each one played back for confirmation before it is saved.</td>
+        </tr>
+
+        <tr>
+          <th class="rowhead">Flat Search App<small>api/telegram.js<br>public/assets/match.js</small></th>
+          <td>The third profile is saved, or someone sends <code>/match</code>.</td>
+          <td>Three profiles and the listing records.</td>
+          <td>Equal three-way split; journeys checked at weekday office hours; missing fields treated as unknown.</td>
+          <td>Splits the rent and checks each share against <em>that person&rsquo;s own</em> ceiling; eliminates anything breaking a stated non-negotiable; scores preferences and travel; ranks on the <em>worst-off</em> person rather than the average.</td>
+          <td>Two or three qualifying flats with a per-person breakdown &mdash; or an empty shortlist naming the limits that eliminated everything. Never a flat chosen for them.</td>
+        </tr>
+
+        <tr>
+          <th class="rowhead">Gemini<small>LLM &middot; lib/gemini.js</small></th>
+          <td>Someone types a travel answer in their own words, or a ranked option needs writing up.</td>
+          <td>The raw sentence at intake; afterwards, the verdict the engine has already reached.</td>
+          <td>The closed destination list, and each person&rsquo;s passes, failures and open questions.</td>
+          <td><b>Reads</b> a typed answer into a structured suggestion, asking rather than guessing when no time limit was given. <b>Writes</b> the tradeoff in plain English. <b>Never decides.</b> It cannot see the filtering and nothing it returns re-enters eligibility.</td>
+          <td>A clarifying question, or two or three sentences naming who is compromising on what. If the key is absent the bot falls back to deterministic wording and matching is unaffected.</td>
+        </tr>
+
+        <tr>
+          <th class="rowhead">Property API<small>public/data/listings.js</small></th>
+          <td>A match run begins.</td>
+          <td>Area, rent, deposit, maintenance, bathrooms, furnishing, floor, lift, parking, pet policy, amenities.</td>
+          <td>No authorised public rental API exists for this market, so this is a curated sample dataset behind an API-shaped loader. Swapping in a real feed means replacing one module.</td>
+          <td>Returns listing records with missing fields preserved as <code>null</code> rather than defaulted, so absent data can never satisfy a requirement.</td>
+          <td>18 records across 8 Pune areas, each carrying its provenance and a portal search link for checking by hand.</td>
+        </tr>
+
+        <tr>
+          <th class="rowhead">Supabase<small>Database &middot; lib/store.js</small></th>
+          <td>Somebody answers a question, completes the form, or votes on an option.</td>
+          <td>Profiles, in-progress form state, and interested / discuss / reject votes.</td>
+          <td>Serverless functions keep nothing between requests, so all state lives here. Row level security is on with no public policy.</td>
+          <td>Reads and writes over PostgREST using the service role. One participant cannot read another&rsquo;s answers out of the database before the match runs.</td>
+          <td>Durable profiles, resumable conversations and a vote tally. Without it the bot falls back to memory and says so on screen.</td>
+        </tr>
+
+        <tr>
+          <th class="rowhead">Other API<small>Optional &middot; public/data/travel.js</small></th>
+          <td>A listing has to be tested against somebody&rsquo;s travel limit.</td>
+          <td>The listing&rsquo;s area, the destination, and that person&rsquo;s maximum minutes.</td>
+          <td>Kavita&rsquo;s office run to Hinjewadi; Riya&rsquo;s 25-minute radius to her family and her gym.</td>
+          <td>Compares a journey <em>range</em> against the limit: upper bound inside it passes, lower bound already past it fails, and a range straddling the limit returns <b>needs verification</b> rather than being rounded to a midpoint and called a match.</td>
+          <td>A pass, a fail or an open question per person per destination. These are area-level planning estimates; a live routing API would drop in here unchanged.</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <h2>What the system will not do</h2>
+  <div class="grid g3">
+    <div class="card">
+      <h3>Choose</h3>
+      <p>It ranks and explains. The decision stays with the three of them, which is the whole
+      point of handing them options with the compromises written down.</p>
+    </div>
+    <div class="card">
+      <h3>Quietly relax a dealbreaker</h3>
+      <p>If nothing qualifies it says so and names the limits doing the eliminating. Filling the
+      shortlist by softening somebody&rsquo;s requirement would recreate the exact failure this
+      replaces.</p>
+    </div>
+    <div class="card">
+      <h3>Treat missing data as a pass</h3>
+      <p>An unstated lift is an open question attached to the option, never a satisfied
+      requirement. Nobody is told a dealbreaker is met on the strength of a blank field.</p>
+    </div>
+  </div>
+</main>
+
+<footer class="wrap">
+  <p>HouseMatch &mdash; Section B components map. Every row corresponds to code in the
+  repository; the file is named under each component.</p>
+</footer>
+
+<script>
+(function () {
+  var t = document.getElementById('theme-toggle');
+  try {
+    var saved = localStorage.getItem('hm-theme');
+    if (saved) { document.documentElement.setAttribute('data-theme', saved); }
+  } catch (e) {}
+  if (t) {
+    t.addEventListener('click', function () {
+      var cur = document.documentElement.getAttribute('data-theme');
+      var isDark = cur === 'dark' ||
+        (!cur && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      var next = isDark ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('hm-theme', next); } catch (e) {}
+    });
+  }
+})();
+</script>
+</body>
+</html>

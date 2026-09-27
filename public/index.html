@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HouseMatch</title>
+<meta name="description" content="Three people state their constraints separately in Telegram, then see which flats qualify and exactly who is compromising on what.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#127968;</text></svg>">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand">HouseMatch <small>PUNE &middot; SHARED FLAT</small></div>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="#example">Worked example</a>
+      <a href="components-map.html">Components map</a>
+      <a href="/api/health">Status</a>
+      <button id="theme-toggle" title="Switch light and dark">Theme</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="lede">
+    <h1>Decide what qualifies before anyone falls in love with a flat</h1>
+    <p>Three friends have been looking for four months and shortlisted nothing. Every listing
+    dies within a day, because nobody wrote down what each of them actually needs before they
+    started looking. HouseMatch is the missing step.</p>
+    <p>Each person fills in the same form privately, in a Telegram chat with the bot. Nobody sees
+    anybody else&rsquo;s answers. When all three are in, the bot checks every listing against
+    every stated requirement and posts the options that survive &mdash; each one showing what
+    each person gets and what each person gives up.</p>
+    <p><strong>It does not pick the flat.</strong> It ends the argument about whether a place even
+    qualifies, so the only conversation left is which compromise they want to make.</p>
+  </div>
+
+  <div class="notice">
+    <strong>Where the line is.</strong> Money, ruled-out areas, lifts, parking, bathrooms and
+    travel limits are decided in plain deterministic code. The language model reads people&rsquo;s
+    typed answers and writes the tradeoffs up in readable English &mdash; it is never asked whether
+    a flat qualifies. Meera&rsquo;s lift is why: code asked <code>lift === true</code> says no to a
+    fifth-floor walk-up, and a model asked &ldquo;would this work for someone with a knee
+    condition?&rdquo; eventually says it&rsquo;s probably fine.
+  </div>
+
+  <h2 id="how">How it works</h2>
+  <div class="grid g3">
+    <div class="card">
+      <h3>1 &middot; Everyone answers alone</h3>
+      <p>Each person messages the bot privately and answers eleven questions: the most she can pay,
+      areas she rules out, what the building must have, and every place she needs to be able to
+      reach within a stated number of minutes.</p>
+      <p class="muted">Nothing reaches the group at this stage. That is the point &mdash; no listing
+      gets judged one objection at a time.</p>
+    </div>
+    <div class="card">
+      <h3>2 &middot; The rules run</h3>
+      <p>Every listing is checked against all three sets of answers at once. Anything that breaks
+      somebody&rsquo;s non-negotiable is out, and the rejection is recorded against the person and
+      the reason.</p>
+      <p class="muted">Where a listing simply doesn&rsquo;t state something, the answer is
+      <em>needs verification</em> &mdash; never a pass.</p>
+    </div>
+    <div class="card">
+      <h3>3 &middot; The group sees everything together</h3>
+      <p>Two or three qualifying flats arrive in the group chat, each with a per-person breakdown
+      and a note on who is carrying most of the compromise. Everyone votes interested, discuss or
+      reject.</p>
+      <p class="muted">If nothing qualifies, it says so and names the limits doing the
+      eliminating, rather than quietly relaxing one to fill the list.</p>
+    </div>
+  </div>
+
+  <h2>Three rules that are easy to get wrong</h2>
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>Rule</th><th>Why it matters here</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>Affordability is per person, never pooled</b></td>
+          <td>Each share is checked against that person&rsquo;s own ceiling. Adding three budgets
+          together and comparing the total to the rent would pass flats that quietly overcommit
+          whoever has the smallest budget. Under an equal split the tightest ceiling in the group
+          sets the rent limit for everyone, which is worth saying out loud.</td>
+        </tr>
+        <tr>
+          <td><b>Unknown is not yes</b></td>
+          <td>Portal list views genuinely omit lift and parking much of the time. A missing field
+          becomes an open question attached to the option, never a satisfied requirement.</td>
+        </tr>
+        <tr>
+          <td><b>Ranked on the worst-off person</b></td>
+          <td>Options are ordered by how the person doing worst out of them fares, not by the
+          group average. A flat that delights two people and punishes the third scores well on a
+          mean, and is exactly the outcome this group has spent four months failing to avoid.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 id="example">The worked example</h2>
+  <p>This is the live engine, running in your browser on the three profiles from the case. The
+  same code decides what the bot posts to the group.</p>
+
+  <div class="card flat" id="assumptions"></div>
+
+  <div class="row" style="max-width:340px;margin-bottom:18px">
+    <div>
+      <label for="traffic">Check journeys at</label>
+      <select id="traffic">
+        <option value="peak" selected>Weekday office hours</option>
+        <option value="offPeak">Lighter traffic</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="results-out"></div>
+
+  <h2>Running it yourself</h2>
+  <div class="card">
+    <p>The bot needs a Telegram token and a webhook. Both are in the README in the repository,
+    and <a href="/api/health">/api/health</a> reports exactly which pieces are configured on this
+    deployment without echoing any secret.</p>
+    <p class="muted">Once it is live: each person opens a private chat with the bot and sends
+    <code>/start</code>; the bot is added to the group and sent <code>/usegroup</code> once so it
+    knows where to post.</p>
+  </div>
+
+</main>
+
+<footer class="wrap">
+  <p><strong>HouseMatch</strong> &mdash; a decision aid, not a decision. Listings are a curated
+  sample dataset rather than a live portal feed, and travel figures are area-level planning
+  estimates rather than live routes. Anything the source did not state is shown as unconfirmed.</p>
+  <p>Built for the MESA AI-native track shared-flat case. See the
+  <a href="components-map.html">components map</a> for how the pieces fit together.</p>
+</footer>
+
+<script src="data/listings.js"></script>
+<script src="data/travel.js"></script>
+<script src="data/demo-profiles.js"></script>
+<script src="assets/match.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
